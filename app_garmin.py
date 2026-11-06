@@ -761,7 +761,7 @@ if arquivos_up:
                 exibir_card_arcos("Pressão Óleo (OilP)", max_oilp, l_oilp_red, None, l_oilp_min, "PSI", ":.0f")
 
             st.divider()
-            st.subheader("🗺️ Área de Instrução (Rota)")
+            st.subheader("🗺️ Área de Instrução (Rota e Google Earth)")
             df_mapa = df[(df['IAS'] > 30)].dropna(subset=['Latitude', 'Longitude'])
             if not df_mapa.empty:
                 fig_map = go.Figure()
@@ -784,11 +784,27 @@ if arquivos_up:
                 )
                 st.plotly_chart(fig_map, use_container_width=True)
                 
+                # Geração do arquivo KML tridimensional compatível com o Google Earth
                 kml = simplekml.Kml()
-                kml.newlinestring(
-                    name="Trajetoria", 
-                    coords=[(r['Longitude'], r['Latitude'], r['AltMSL']*0.3048) for i, r in df_mapa.iterrows()]
-                ).style.linestyle.color = simplekml.Color.cyan
+                linestring = kml.newlinestring(
+                    name="Trajetoria de Voo 3D", 
+                    coords=[(r['Longitude'], r['Latitude'], r['AltMSL'] * 0.3048) for i, r in df_mapa.iterrows()]
+                )
+                linestring.altitudemode = simplekml.AltitudeMode.relativetoground
+                linestring.style.linestyle.color = simplekml.Color.cyan
+                linestring.style.linestyle.width = 4
+
+                ponto_inicio = kml.newpoint(
+                    name="Início da Missão",
+                    coords=[(df_mapa['Longitude'].iloc[0], df_mapa['Latitude'].iloc[0], df_mapa['AltMSL'].iloc[0] * 0.3048)]
+                )
+                ponto_inicio.style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/grn-circle.png"
+
+                ponto_fim = kml.newpoint(
+                    name="Término / Pouso",
+                    coords=[(df_mapa['Longitude'].iloc[-1], df_mapa['Latitude'].iloc[-1], df_mapa['AltMSL'].iloc[-1] * 0.3048)]
+                )
+                ponto_fim.style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/red-circle.png"
                 
                 st.download_button("⬇️ Baixar Rota 3D (Google Earth .KML)", data=kml.kml(), file_name="rota_voo.kml", mime="application/vnd.google-earth.kml+xml")
 
