@@ -18,22 +18,36 @@ st.set_page_config(page_title="Telemetria AFA", layout="wide")
 ARQUIVO_PERFIS = "perfis_aeronaves.json"
 PERFIS_PADRAO = {
     "T-27M (Oficial)": {
-        "g_max": 3.0, "g_min": -1.5,
-        "tq_red": 1795.0, "tq_yel": 1795.0,
-        "itt_red": 790.0, "itt_yel": 740.0,
-        "ng_red": 101.5, "ng_yel": 100.0,
-        "nh_red": 101.0, "nh_yel": 100.0,
-        "oilt_red": 99.0, "oilt_min_green": 10.0,
-        "oilp_red": 95.0, "oilp_min_green": 75.0
+        "g_max": 3.0, 
+        "g_min": -1.5,
+        "tq_red": 1795.0, 
+        "tq_yel": 1795.0,
+        "itt_red": 790.0, 
+        "itt_yel": 740.0,
+        "ng_red": 101.5, 
+        "ng_yel": 100.0,
+        "nh_red": 101.0, 
+        "nh_yel": 100.0,
+        "oilt_red": 99.0, 
+        "oilt_min_green": 10.0,
+        "oilp_red": 95.0, 
+        "oilp_min_green": 75.0
     },
     "Multi-Motor (Padrão)": {
-        "g_max": 2.5, "g_min": 0.0,
-        "tq_red": 1500.0, "tq_yel": 1400.0,
-        "itt_red": 850.0, "itt_yel": 800.0,
-        "ng_red": 100.0, "ng_yel": 98.0,
-        "nh_red": 100.0, "nh_yel": 98.0,
-        "oilt_red": 100.0, "oilt_min_green": 20.0,
-        "oilp_red": 90.0, "oilp_min_green": 60.0
+        "g_max": 2.5, 
+        "g_min": 0.0,
+        "tq_red": 1500.0, 
+        "tq_yel": 1400.0,
+        "itt_red": 850.0, 
+        "itt_yel": 800.0,
+        "ng_red": 100.0, 
+        "ng_yel": 98.0,
+        "nh_red": 100.0, 
+        "nh_yel": 98.0,
+        "oilt_red": 100.0, 
+        "oilt_min_green": 20.0,
+        "oilp_red": 90.0, 
+        "oilp_min_green": 60.0
     }
 }
 
@@ -52,6 +66,7 @@ def salvar_perfis(perfis):
 
 perfis_salvos = carregar_perfis()
 
+
 # ==========================================
 # 2. INICIALIZAÇÃO DE VARIÁVEIS DE SESSÃO
 # ==========================================
@@ -63,14 +78,19 @@ obs_keys = [
     'obs_comparativo', 
     'obs_3d'
 ]
+
 for k in obs_keys:
     if k not in st.session_state:
         st.session_state[k] = ""
 
 
 # ==========================================
-# 3. BARRA LATERAL (MENU)
+# 3. BARRA LATERAL (MENU E ASSINATURA)
 # ==========================================
+st.sidebar.markdown("### 🛠️ Sistema AFA")
+st.sidebar.caption("👨‍✈️ **Analista Responsável:** Filipe Iack")
+st.sidebar.markdown("---")
+
 st.sidebar.header("✈️ Projeto da Aeronave")
 projeto_atual = st.sidebar.selectbox("Selecione o Perfil:", list(perfis_salvos.keys()))
 p_dados = perfis_salvos[projeto_atual]
@@ -134,7 +154,6 @@ with st.sidebar.expander("⚙️ Arcos do Painel (Verde/Amarelo/Vermelho)", expa
             "oilp_red": l_oilp_red, 
             "oilp_min_green": l_oilp_min
         }
-        # Converte Nones para strings vazias para salvar no JSON
         perfis_salvos[projeto_atual] = {k: (v if v is not None else "") for k, v in perfis_salvos[projeto_atual].items()}
         salvar_perfis(perfis_salvos)
         st.success(f"Arcos do {projeto_atual} salvos!")
@@ -152,13 +171,11 @@ def processar_dados(file_bytes):
     df = pd.read_csv(io.BytesIO(file_bytes), skiprows=2, low_memory=False)
     df.columns = df.columns.str.strip()
     
-    # Tratamento seguro das strings de data e hora
     if 'Lcl Date' in df.columns:
         df['Lcl Date'] = df['Lcl Date'].astype(str).str.strip()
     if 'Lcl Time' in df.columns:
         df['Lcl Time'] = df['Lcl Time'].astype(str).str.strip()
 
-    # Criação da coluna Datetime principal
     if 'Lcl Date' in df.columns and 'Lcl Time' in df.columns:
         df['Datetime'] = pd.to_datetime(df['Lcl Date'] + ' ' + df['Lcl Time'], errors='coerce')
     else:
@@ -177,13 +194,11 @@ def processar_dados(file_bytes):
     if 'E1 OilT' in df.columns: 
         df['E1 OilT_Celsius'] = (df['E1 OilT'] - 32) / 1.8
         
-    # Limpa linhas vazias e ordena cronologicamente
     df = df.dropna(subset=['Datetime']).sort_values('Datetime')
     return df
 
 def formula_haversine(lat1, lon1, lat2, lon2):
-    """Calcula a distância em metros entre duas coordenadas GPS"""
-    R = 6371000 # Raio da Terra em metros
+    R = 6371000 
     phi1, phi2 = np.radians(lat1), np.radians(lat2)
     dphi = np.radians(lat2 - lat1)
     dlambda = np.radians(lon2 - lon1)
@@ -197,8 +212,9 @@ def verificar_temporizador(df, coluna, limite_valor, segundos_necessarios):
     consecutivos = acima_limite.groupby((~acima_limite).cumsum()).sum()
     return consecutivos.max() >= segundos_necessarios
 
+
 # ==========================================
-# 5. GERADORES DE INTERFACE (CARTÕES E TABELAS)
+# 5. GERADORES DE INTERFACE
 # ==========================================
 def exibir_card_arcos(titulo, pico, red_line, yellow_line, min_green, unidade, formato=":.1f", e_minimo=False):
     cor, status = "#2ecc71", "ARCO VERDE"
@@ -268,7 +284,6 @@ def exibir_tabela_grande(df_view):
         'E1 OilT_Celsius': 'Temp. Óleo (ºC)', 'E1 OilP': 'Pressão Óleo (PSI)'
     }
     df_traduzido = df_view.rename(columns=traducao)
-    
     for col in df_traduzido.columns:
         if col in ['Altitude (ft)', 'Torque (Lbs)', 'ITT (ºC)', 'Temp. Óleo (ºC)', 'Pressão Óleo (PSI)']:
             df_traduzido[col] = df_traduzido[col].apply(lambda x: f"{x:.0f}" if pd.notnull(x) else "-")
@@ -276,11 +291,11 @@ def exibir_tabela_grande(df_view):
             df_traduzido[col] = df_traduzido[col].apply(lambda x: f"{x:.1f}" if pd.notnull(x) else "-")
         elif col == 'Força G':
             df_traduzido[col] = df_traduzido[col].apply(lambda x: f"{x:.2f}" if pd.notnull(x) else "-")
-            
     render_html_table(df_traduzido)
 
+
 # ==========================================
-# 6. GERADORES DE PDF OFICIAL
+# 6. GERADORES DE PDF COM ASSINATURA
 # ==========================================
 def formatar_texto_pdf(texto):
     return texto.encode('latin-1', 'ignore').decode('latin-1').strip()
@@ -293,7 +308,7 @@ def gerar_pdf_solo(tempos, alertas, obs_dict):
     
     pdf.set_font("Arial", 'I', 10)
     data_hoje = datetime.now().strftime('%d/%m/%Y')
-    pdf.cell(200, 5, txt=f"Perfil Aplicado: {projeto_atual} | Data da Analise: {data_hoje}", ln=True, align='C')
+    pdf.cell(200, 5, txt=f"Perfil: {projeto_atual} | Analista: Filipe Iack | Data: {data_hoje}", ln=True, align='C')
     pdf.ln(5)
     
     pdf.set_font("Arial", 'B', 12)
@@ -309,21 +324,21 @@ def gerar_pdf_solo(tempos, alertas, obs_dict):
     pdf.ln(5)
     
     pdf.set_font("Arial", 'B', 12)
-    pdf.cell(200, 8, txt=" 2. AUDITORIA DE ALERTAS (ZONAS AMARELAS E VERMELHAS)", ln=True, fill=True)
+    pdf.cell(200, 8, txt=" 2. AUDITORIA DE ALERTAS", ln=True, fill=True)
     
     pdf.set_font("Arial", 'B', 10)
     if len(alertas) > 0:
         for alerta in alertas: 
-            if "LINHA VERMELHA" in alerta or "CRÍTICO" in alerta:
+            if "LINHA VERMELHA" in alerta or "CRÍTICO" in alerta: 
                 pdf.set_text_color(220, 0, 0)
-            else:
+            else: 
                 pdf.set_text_color(200, 150, 0)
             alerta_limpo = alerta.replace("🔴 ", "").replace("🟡 ", "").replace("✅ ", "")
             pdf.multi_cell(0, 6, txt=formatar_texto_pdf(alerta_limpo))
             pdf.ln(1)
     else:
         pdf.set_text_color(0, 150, 0)
-        pdf.cell(200, 8, txt=" Nenhum alerta estrutural ou de motor registado.", ln=True)
+        pdf.cell(200, 8, txt=" Nenhum alerta registado.", ln=True)
     
     pdf.set_text_color(0, 0, 0)
     pdf.ln(5)
@@ -343,7 +358,12 @@ def gerar_pdf_solo(tempos, alertas, obs_dict):
             
     if not tem_obs:
         pdf.set_font("Arial", '', 11)
-        pdf.cell(200, 8, txt="Nenhuma observacao inserida nas abas do sistema.", ln=True)
+        pdf.cell(200, 8, txt="Nenhuma observacao inserida.", ln=True)
+        
+    pdf.ln(10)
+    pdf.set_font("Arial", 'I', 10)
+    pdf.cell(200, 5, txt="____________________________________________", ln=True, align='C')
+    pdf.cell(200, 5, txt="Filipe Iack - Especialista em Telemetria AFA", ln=True, align='C')
         
     return pdf.output(dest='S').encode('latin-1')
 
@@ -355,7 +375,7 @@ def gerar_pdf_formatura(arq_lider, arq_ala, obs_dict):
     
     pdf.set_font("Arial", 'I', 10)
     data_hoje = datetime.now().strftime('%d/%m/%Y')
-    pdf.cell(200, 5, txt=f"Data da Analise: {data_hoje}", ln=True, align='C')
+    pdf.cell(200, 5, txt=f"Analista: Filipe Iack | Data: {data_hoje}", ln=True, align='C')
     pdf.ln(5)
     
     pdf.set_font("Arial", 'B', 12)
@@ -368,7 +388,7 @@ def gerar_pdf_formatura(arq_lider, arq_ala, obs_dict):
     pdf.ln(5)
     
     pdf.set_font("Arial", 'B', 12)
-    pdf.cell(200, 8, txt=" 2. DEBRIEFING E OBSERVACOES DO AVALIADOR", ln=True, fill=True)
+    pdf.cell(200, 8, txt=" 2. DEBRIEFING E AVALIACAO TÁTICA", ln=True, fill=True)
     
     tem_obs = False
     for titulo, texto in obs_dict.items():
@@ -383,6 +403,11 @@ def gerar_pdf_formatura(arq_lider, arq_ala, obs_dict):
     if not tem_obs:
         pdf.set_font("Arial", '', 11)
         pdf.cell(200, 8, txt="Nenhuma observacao inserida no dossie.", ln=True)
+        
+    pdf.ln(10)
+    pdf.set_font("Arial", 'I', 10)
+    pdf.cell(200, 5, txt="____________________________________________", ln=True, align='C')
+    pdf.cell(200, 5, txt="Filipe Iack - Especialista em Telemetria AFA", ln=True, align='C')
         
     return pdf.output(dest='S').encode('latin-1')
 
@@ -422,7 +447,6 @@ if arquivos_up:
             with c_sync:
                 ajuste_horas = st.number_input("⏳ Ajuste de Fuso do Ala (Horas):", min_value=-12, max_value=12, value=0, step=1, help="Use -3 ou +3")
                 
-            # INJEÇÃO DA BARRA LATERAL (PDF EXPORT FORMATURA)
             st.sidebar.markdown("---")
             st.sidebar.success("📄 **Dossiê Pronto para Exportação**")
             
@@ -469,6 +493,7 @@ if arquivos_up:
                     
                     with aba_dist:
                         st.header("Análise de Distância na Formatura")
+                        st.markdown("Verifique em que exato momento e manobra o Ala se afastou ou se aproximou excessivamente do Líder.")
                         
                         df_merge['Distancia_m'] = formula_haversine(
                             df_merge['Latitude_lider'], df_merge['Longitude_lider'], 
@@ -516,7 +541,7 @@ if arquivos_up:
                         st.divider()
                         st.markdown("📝 **Observações - Distância** (Esses comentários irão para o PDF)")
                         st.session_state.obs_distancia = st.text_area("Escreva aqui:", value=st.session_state.obs_distancia, key='k_dist')
-                        if st.button("💾 Salvar Comentário", key="b_dist"):
+                        if st.button("💾 Salvar Comentário", key="b_dist"): 
                             st.success("Salvo com sucesso!")
 
                     with aba_comp:
@@ -565,7 +590,7 @@ if arquivos_up:
                         st.divider()
                         st.markdown("📝 **Observações - Comparativo de Motores**")
                         st.session_state.obs_comparativo = st.text_area("Escreva aqui:", value=st.session_state.obs_comparativo, key='k_comp')
-                        if st.button("💾 Salvar Comentário", key="b_comp"):
+                        if st.button("💾 Salvar Comentário", key="b_comp"): 
                             st.success("Salvo com sucesso!")
 
                     with aba_3d:
@@ -585,7 +610,7 @@ if arquivos_up:
                         st.divider()
                         st.markdown("📝 **Observações - Trajetória 3D**")
                         st.session_state.obs_3d = st.text_area("Escreva aqui:", value=st.session_state.obs_3d, key='k_3d')
-                        if st.button("💾 Salvar Comentário", key="b_3d"):
+                        if st.button("💾 Salvar Comentário", key="b_3d"): 
                             st.success("Salvo com sucesso!")
 
     # ---------------------------------------------------------
@@ -617,7 +642,6 @@ if arquivos_up:
             except: 
                 alertas.append(mensagem)
 
-        # Lógica de Limites e Temporizadores do T-27M
         if l_g_max is not None and max_g >= l_g_max: 
             add_alerta_contexto('NormAc', max_g, f"🔴 LINHA VERMELHA: Força G Positiva ({max_g:.2f}G)")
         if l_g_min is not None and min_g <= l_g_min: 
@@ -699,7 +723,6 @@ if arquivos_up:
         else:
             voo_ativo = pd.DataFrame()
 
-        # INJEÇÃO DA BARRA LATERAL (PDF EXPORT SOLO)
         st.sidebar.markdown("---")
         st.sidebar.success("📄 **Dossiê Pronto para Exportação**")
         
@@ -761,10 +784,18 @@ if arquivos_up:
                 )
                 st.plotly_chart(fig_map, use_container_width=True)
                 
+                kml = simplekml.Kml()
+                kml.newlinestring(
+                    name="Trajetoria", 
+                    coords=[(r['Longitude'], r['Latitude'], r['AltMSL']*0.3048) for i, r in df_mapa.iterrows()]
+                ).style.linestyle.color = simplekml.Color.cyan
+                
+                st.download_button("⬇️ Baixar Rota 3D (Google Earth .KML)", data=kml.kml(), file_name="rota_voo.kml", mime="application/vnd.google-earth.kml+xml")
+
             st.divider()
-            st.markdown("📝 **Observações - Resumo de Painel e Rota** (Esses comentários irão para o PDF)")
+            st.markdown("📝 **Observações - Resumo de Painel e Rota**")
             st.session_state.obs_resumo = st.text_area("Escreva aqui:", value=st.session_state.obs_resumo, key='k_res')
-            if st.button("💾 Salvar Comentário", key="b_res"):
+            if st.button("💾 Salvar Comentário", key="b_res"): 
                 st.success("Salvo com sucesso!")
 
         with aba_inspetoria:
@@ -864,7 +895,7 @@ if arquivos_up:
             st.divider()
             st.markdown("📝 **Observações - Inspetoria e Gráficos**")
             st.session_state.obs_graficos = st.text_area("Escreva aqui:", value=st.session_state.obs_graficos, key='k_graf')
-            if st.button("💾 Salvar Comentário", key="b_graf"):
+            if st.button("💾 Salvar Comentário", key="b_graf"): 
                 st.success("Salvo com sucesso!")
 
         with aba_manobras:
@@ -911,5 +942,5 @@ if arquivos_up:
             st.divider()
             st.markdown("📝 **Observações - Avaliador de Manobras e Pouso**")
             st.session_state.obs_manobras = st.text_area("Escreva aqui:", value=st.session_state.obs_manobras, key='k_manob')
-            if st.button("💾 Salvar Comentário", key="b_manob"):
+            if st.button("💾 Salvar Comentário", key="b_manob"): 
                 st.success("Salvo com sucesso!")
