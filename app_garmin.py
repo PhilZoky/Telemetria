@@ -13,11 +13,130 @@ from datetime import datetime
 import streamlit.components.v1 as components
 
 # ==========================================
+# 0. SISTEMA DE LOGIN E CADASTRO (SaaS)
+# ==========================================
+import json
+import os
+
+ARQUIVO_USUARIOS = "banco_usuarios.json"
+
+# Carrega os usuários salvos ou cria o seu usuário master inicial estruturado
+def carregar_usuarios():
+    if os.path.exists(ARQUIVO_USUARIOS):
+        try:
+            with open(ARQUIVO_USUARIOS, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return criar_admin_padrao()
+    return criar_admin_padrao()
+
+def criar_admin_padrao():
+    return {
+        "Filipe_Iack": {
+            "senha": "210772",
+            "nome": "Filipe Iack",
+            "email": "admin@telemetria.com",
+            "organizacao": "AFA - Master"
+        }
+    }
+
+def salvar_usuarios(usuarios):
+    with open(ARQUIVO_USUARIOS, "w", encoding="utf-8") as f:
+        json.dump(usuarios, f, indent=4)
+
+usuarios_permitidos = carregar_usuarios()
+
+if "usuario_logado" not in st.session_state:
+    st.session_state.usuario_logado = None
+if "nome_logado" not in st.session_state:
+    st.session_state.nome_logado = None
+
+# Tela de bloqueio e formulários
+if st.session_state.usuario_logado is None:
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.title("🔒 Plataforma AFA")
+        st.caption("Sistema Comercial de Telemetria e Inspetoria de Voo")
+        
+        # Cria abas separadas para entrar ou criar conta
+        aba_login, aba_cadastro = st.tabs(["Fazer Login", "Criar Nova Conta"])
+        
+        with aba_login:
+            st.markdown("#### Acesse o seu painel")
+            usuario_input = st.text_input("Nome de Usuário", key="log_user")
+            senha_input = st.text_input("Senha", type="password", key="log_pass")
+            
+            if st.button("Entrar no Sistema", use_container_width=True):
+                if usuario_input in usuarios_permitidos:
+                    dados_usuario = usuarios_permitidos[usuario_input]
+                    
+                    # Compatibilidade (verifica se é o formato antigo ou o novo formato completo)
+                    senha_correta = False
+                    if isinstance(dados_usuario, str) and dados_usuario == senha_input:
+                        senha_correta = True
+                        st.session_state.nome_logado = usuario_input
+                    elif isinstance(dados_usuario, dict) and dados_usuario.get("senha") == senha_input:
+                        senha_correta = True
+                        st.session_state.nome_logado = dados_usuario.get("nome", usuario_input)
+
+                    if senha_correta:
+                        st.session_state.usuario_logado = usuario_input
+                        st.rerun()
+                    else:
+                        st.error("❌ Credenciais incorretas.")
+                else:
+                    st.error("❌ Credenciais incorretas.")
+                    
+        with aba_cadastro:
+            st.markdown("#### Dados do Cliente")
+            novo_nome = st.text_input("Nome Completo", key="cad_nome")
+            novo_email = st.text_input("E-mail de Contato", key="cad_email")
+            nova_org = st.text_input("Organização / Esquadrão / Empresa", key="cad_org")
+            
+            st.markdown("#### Dados de Acesso")
+            novo_usuario = st.text_input("Escolha um Nome de Usuário (Login)", key="cad_user")
+            nova_senha = st.text_input("Crie uma Senha", type="password", key="cad_pass")
+            
+            if st.button("Cadastrar Cliente", use_container_width=True):
+                if novo_usuario in usuarios_permitidos:
+                    st.warning("⚠️ Este nome de usuário já existe. Escolha outro.")
+                elif not novo_usuario or not nova_senha or not novo_nome or not novo_email:
+                    st.warning("⚠️ Preencha todos os campos obrigatórios (Nome, E-mail, Usuário e Senha).")
+                else:
+                    # Estrutura profissional de dados do cliente (Futuro CRM)
+                    usuarios_permitidos[novo_usuario] = {
+                        "senha": nova_senha,
+                        "nome": novo_nome,
+                        "email": novo_email,
+                        "organizacao": nova_org,
+                        "data_cadastro": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    }
+                    salvar_usuarios(usuarios_permitidos)
+                    st.success(f"✅ Conta de {novo_nome} criada com sucesso! Pode ir à aba de Login para aceder.")
+                    
+    st.stop() # Bloqueia o carregamento do resto do site
+
+# ==========================================
+# PAINEL DO USUÁRIO LOGADO (Barra Lateral)
+# ==========================================
+st.sidebar.markdown(f"👤 **Piloto/Analista:** `{st.session_state.nome_logado}`")
+if st.sidebar.button("Sair (Logout)"):
+    st.session_state.usuario_logado = None
+    st.session_state.nome_logado = None
+    st.rerun()
+
+# Ajuste automático do ficheiro de perfis para cada cliente:
+ARQUIVO_PERFIS = f"perfis_{st.session_state.usuario_logado}.json"
+
+
+# ==========================================
 # 1. CONFIGURAÇÃO E GERENCIADOR DE PERFIS
 # ==========================================
 st.set_page_config(page_title="Telemetria AFA", layout="wide")
 
-ARQUIVO_PERFIS = "perfis_aeronaves.json"
+ARQUIVO_PERFIS = f"perfis_{st.session_state.usuario_logado}.json"
 PERFIS_PADRAO = {
     "T-27M (Oficial)": {
         "tipo_aeronave": "Asa Fixa",
