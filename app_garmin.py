@@ -121,7 +121,7 @@ if st.session_state.usuario_logado is None:
 # ==========================================
 # PAINEL DO USUÁRIO LOGADO (Barra Lateral)
 # ==========================================
-st.sidebar.markdown(f"👤 **Piloto/Analista:** `{st.session_state.nome_logado}`")
+st.sidebar.markdown(f"👤 **Mecânico:** `{st.session_state.nome_logado}`")
 if st.sidebar.button("Sair (Logout)"):
     st.session_state.usuario_logado = None
     st.session_state.nome_logado = None
