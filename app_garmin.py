@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import simplekml
 from docx import Document
-from docx.shared import RGBColor
+from docx.shared import RGBColor, Inches
 import io
 import os
 import json
@@ -168,8 +168,7 @@ obs_keys = [
     'obs_manobras', 
     'obs_distancia', 
     'obs_comparativo', 
-    'obs_3d',
-    'obs_radar'
+    'obs_3d'
 ]
 
 for k in obs_keys:
@@ -341,9 +340,17 @@ def verificar_temporizador(df, coluna, limite_valor, segundos_necessarios):
     consecutivos = acima_limite.groupby((~acima_limite).cumsum()).sum()
     return consecutivos.max() >= segundos_necessarios
 
+def calcular_minutos_voo(df):
+    if 'IAS' in df.columns:
+        voo = df[df['IAS'] > 40]
+        if not voo.empty:
+            t0 = voo['Datetime'].iloc[0]
+            return (df['Datetime'] - t0).dt.total_seconds() / 60.0
+    return (df['Datetime'] - df['Datetime'].iloc[0]).dt.total_seconds() / 60.0
+
 
 # ==========================================
-# 5. GERADORES DE INTERFACE
+# 5. GERADORES DE INTERFACE E RELATÓRIOS (.DOCX)
 # ==========================================
 def exibir_card_arcos(titulo, pico, red_line, yellow_line, min_green, unidade, formato=":.1f", e_minimo=False):
     cor, status = "#2ecc71", "ARCO VERDE"
@@ -410,7 +417,6 @@ def exibir_tabela_grande(df_view):
         'Lcl Time': 'Hora Local', 'AltMSL': 'Altitude (ft)', 'IAS': 'Velocidade (kt)',
         'NormAc': 'Força G', 'Pitch': 'Arfagem (º)', 'Roll': 'Rolagem (º)'
     }
-    
     for i in range(1, 7):
         traducao[f'E{i} Torq ft lbs'] = f'Torque M{i} (Lbs)'
         traducao[f'E{i} ITT'] = f'ITT M{i} (ºC)'
@@ -429,59 +435,21 @@ def exibir_tabela_grande(df_view):
             df_traduzido[col] = df_traduzido[col].apply(lambda x: f"{x:.2f}" if pd.notnull(x) else "-")
     render_html_table(df_traduzido)
 
+# Função para inserir imagens de forma segura no Word
+def injetar_graficos_word(doc, graficos_dict):
+    if any(fig is not None for fig in graficos_dict.values()):
+        doc.add_heading("ANEXOS GRÁFICOS", level=1)
+        for titulo_grafico, fig in graficos_dict.items():
+            if fig is not None:
+                try:
+                    doc.add_heading(titulo_grafico, level=2)
+                    img_bytes = fig.to_image(format="png", width=900, height=500, scale=2)
+                    doc.add_picture(io.BytesIO(img_bytes), width=Inches(6.0))
+                except Exception as e:
+                    doc.add_paragraph(f"[Aviso: Não foi possível exportar a imagem '{titulo_grafico}'. O servidor pode estar sem a biblioteca 'kaleido'].")
 
-# ==========================================
-# 6. GERADORES DE DOCX (WORD) - SUBSTITUI O PDF
-# ==========================================
-def gerar_docx_solo(tempos, alertas, obs_dict):
-    doc = Document()
-    titulo = doc.add_heading("RELATÓRIO OFICIAL DE INSPETORIA - VOO SOLO", 0)
-    titulo.alignment = 1
-    
-    data_hoje = datetime.now().strftime('%d/%m/%Y')
-    sub = doc.add_paragraph(f"Perfil: {projeto_atual} | Analista: {st.session_state.nome_logado} | Data: {data_hoje}")
-    sub.alignment = 1
-    
-    doc.add_heading("1. LOGBOOK DA MISSÃO", level=1)
-    doc.add_paragraph(f"Acionamento: {tempos.get('acionamento','-')}")
-    doc.add_paragraph(f"Decolagem: {tempos.get('decolagem','-')}")
-    doc.add_paragraph(f"Pouso: {tempos.get('pouso','-')}")
-    doc.add_paragraph(f"Corte do Motor: {tempos.get('corte','-')}")
-    doc.add_paragraph(f"TEMPO DE VOO: {tempos.get('t_voo','-')}").runs[0].bold = True
-    
-    doc.add_heading("2. AUDITORIA DE ALERTAS", level=1)
-    if len(alertas) > 0:
-        for alerta in alertas:
-            p_al = doc.add_paragraph()
-            run = p_al.add_run(alerta)
-            if "LINHA VERMELHA" in alerta or "CRÍTICO" in alerta or "🔴" in alerta:
-                run.font.color.rgb = RGBColor(220, 0, 0)
-            elif "AMARELO" in alerta or "🟡" in alerta:
-                run.font.color.rgb = RGBColor(200, 150, 0)
-    else:
-        p_al = doc.add_paragraph()
-        run = p_al.add_run("✅ Nenhum alerta registado.")
-        run.font.color.rgb = RGBColor(0, 150, 0)
-        
-    doc.add_heading("3. OBSERVAÇÕES DA INSPETORIA", level=1)
-    tem_obs = False
-    for titulo_obs, texto in obs_dict.items():
-        if str(texto).strip() != "":
-            tem_obs = True
-            doc.add_heading(f"[{titulo_obs}]", level=2)
-            doc.add_paragraph(str(texto))
-            
-    if not tem_obs:
-        doc.add_paragraph("Nenhuma observação inserida.")
-        
-    doc.add_paragraph("\n\n____________________________________________").alignment = 1
-    doc.add_paragraph(f"{st.session_state.nome_logado} - Especialista em Telemetria").alignment = 1
-    
-    io_bytes = io.BytesIO()
-    doc.save(io_bytes)
-    return io_bytes.getvalue()
-
-def gerar_docx_solo_editado(tempos_dict, alertas_texto, obs_dict):
+# Gerador Word VOO SOLO
+def gerar_docx_solo_editado(tempos_dict, alertas_texto, obs_dict, graficos_dict):
     doc = Document()
     titulo = doc.add_heading("RELATÓRIO OFICIAL DE INSPETORIA - VOO SOLO", 0)
     titulo.alignment = 1
@@ -499,7 +467,6 @@ def gerar_docx_solo_editado(tempos_dict, alertas_texto, obs_dict):
     
     doc.add_heading("2. AUDITORIA DE ALERTAS", level=1)
     linhas_alerta = [linha for linha in alertas_texto.split('\n') if linha.strip()]
-    
     if len(linhas_alerta) > 0:
         for alerta in linhas_alerta:
             p_al = doc.add_paragraph()
@@ -509,9 +476,7 @@ def gerar_docx_solo_editado(tempos_dict, alertas_texto, obs_dict):
             elif "AMARELO" in alerta or "🟡" in alerta:
                 run.font.color.rgb = RGBColor(200, 150, 0)
     else:
-        p_al = doc.add_paragraph()
-        run = p_al.add_run("✅ Nenhum alerta registado.")
-        run.font.color.rgb = RGBColor(0, 150, 0)
+        doc.add_paragraph("✅ Nenhum alerta registado.").runs[0].font.color.rgb = RGBColor(0, 150, 0)
         
     doc.add_heading("3. OBSERVAÇÕES DA INSPETORIA", level=1)
     tem_obs = False
@@ -520,9 +485,10 @@ def gerar_docx_solo_editado(tempos_dict, alertas_texto, obs_dict):
             tem_obs = True
             doc.add_heading(f"[{titulo_obs}]", level=2)
             doc.add_paragraph(str(texto))
-            
-    if not tem_obs:
-        doc.add_paragraph("Nenhuma observação inserida.")
+    if not tem_obs: doc.add_paragraph("Nenhuma observação inserida.")
+        
+    # Injetando as Imagens Salvas no Relatório
+    injetar_graficos_word(doc, graficos_dict)
         
     doc.add_paragraph("\n\n____________________________________________").alignment = 1
     doc.add_paragraph(f"{st.session_state.nome_logado} - Especialista em Telemetria").alignment = 1
@@ -531,14 +497,13 @@ def gerar_docx_solo_editado(tempos_dict, alertas_texto, obs_dict):
     doc.save(io_bytes)
     return io_bytes.getvalue()
 
-def gerar_docx_formatura(arq_lider, arq_ala, obs_dict):
+# Gerador Word FORMATURA
+def gerar_docx_formatura_editado(arq_lider, arq_ala, obs_dict, graficos_dict):
     doc = Document()
     titulo = doc.add_heading("RELATÓRIO TÁTICO DE FORMATURA", 0)
     titulo.alignment = 1
-    
     data_hoje = datetime.now().strftime('%d/%m/%Y')
-    sub = doc.add_paragraph(f"Analista: {st.session_state.nome_logado} | Data: {data_hoje}")
-    sub.alignment = 1
+    doc.add_paragraph(f"Analista: {st.session_state.nome_logado} | Data: {data_hoje}").alignment = 1
     
     doc.add_heading("1. AERONAVES ENVOLVIDAS", level=1)
     doc.add_paragraph(f"Ficheiro Líder: {arq_lider}")
@@ -551,9 +516,10 @@ def gerar_docx_formatura(arq_lider, arq_ala, obs_dict):
             tem_obs = True
             doc.add_heading(f"[{titulo_obs}]", level=2)
             doc.add_paragraph(str(texto))
-            
-    if not tem_obs:
-        doc.add_paragraph("Nenhuma observação inserida no dossiê.")
+    if not tem_obs: doc.add_paragraph("Nenhuma observação inserida no dossiê.")
+        
+    # Injetando as Imagens Salvas no Relatório
+    injetar_graficos_word(doc, graficos_dict)
         
     doc.add_paragraph("\n\n____________________________________________").alignment = 1
     doc.add_paragraph(f"{st.session_state.nome_logado} - Especialista em Telemetria").alignment = 1
@@ -562,8 +528,61 @@ def gerar_docx_formatura(arq_lider, arq_ala, obs_dict):
     doc.save(io_bytes)
     return io_bytes.getvalue()
 
-def gerar_docx_formatura_editado(arq_lider, arq_ala, obs_dict):
-    return gerar_docx_formatura(arq_lider, arq_ala, obs_dict)
+# Gerador Word COMPARATIVO DE MÁQUINA (TREND MONITORING)
+def gerar_docx_comparativo_editado(arq_a, arq_b, df_metricas, obs_dict, graficos_dict):
+    doc = Document()
+    titulo = doc.add_heading("RELATÓRIO DE TREND MONITORING (COMPARATIVO)", 0)
+    titulo.alignment = 1
+
+    data_hoje = datetime.now().strftime('%d/%m/%Y')
+    doc.add_paragraph(f"Perfil: {projeto_atual} | Analista: {st.session_state.nome_logado} | Data: {data_hoje}").alignment = 1
+
+    doc.add_heading("1. VOOS AVALIADOS", level=1)
+    doc.add_paragraph(f"Voo A (Referência / Antigo): {arq_a}")
+    doc.add_paragraph(f"Voo B (Avaliado / Recente): {arq_b}")
+
+    doc.add_heading("2. ANÁLISE DE DESEMPENHO E DEGRADAÇÃO", level=1)
+    table = doc.add_table(rows=1, cols=4)
+    table.style = 'Table Grid'
+    hdr_cells = table.rows[0].cells
+    hdr_cells[0].text = 'Parâmetro (Picos)'
+    hdr_cells[1].text = 'Voo A'
+    hdr_cells[2].text = 'Voo B'
+    hdr_cells[3].text = 'Variação (Delta)'
+
+    for _, row in df_metricas.iterrows():
+        row_cells = table.add_row().cells
+        row_cells[0].text = str(row['Parâmetro'])
+        row_cells[1].text = str(row['Voo A'])
+        row_cells[2].text = str(row['Voo B'])
+        row_cells[3].text = str(row['Variação (Delta)'])
+        
+        texto_delta = str(row['Variação (Delta)'])
+        if "+" in texto_delta and ("Temp" in str(row['Parâmetro']) or "Torque" in str(row['Parâmetro'])):
+            row_cells[3].paragraphs[0].runs[0].font.color.rgb = RGBColor(220, 0, 0)
+        elif "-" in texto_delta and ("Temp" in str(row['Parâmetro']) or "Torque" in str(row['Parâmetro'])):
+            row_cells[3].paragraphs[0].runs[0].font.color.rgb = RGBColor(0, 150, 0)
+
+    doc.add_heading("3. PARECER TÉCNICO DA INSPETORIA", level=1)
+    tem_obs = False
+    for titulo_obs, texto in obs_dict.items():
+        if str(texto).strip() != "":
+            tem_obs = True
+            doc.add_heading(f"[{titulo_obs}]", level=2)
+            doc.add_paragraph(str(texto))
+
+    if not tem_obs:
+        doc.add_paragraph("Nenhuma observação inserida.")
+
+    # Injetando as Imagens Salvas no Relatório
+    injetar_graficos_word(doc, graficos_dict)
+
+    doc.add_paragraph("\n\n____________________________________________").alignment = 1
+    doc.add_paragraph(f"{st.session_state.nome_logado} - Especialista em Telemetria").alignment = 1
+
+    io_bytes = io.BytesIO()
+    doc.save(io_bytes)
+    return io_bytes.getvalue()
 
 
 # ==========================================
@@ -574,7 +593,7 @@ arquivos_up = st.file_uploader(f"Carregar arquivo(s) .csv do Garmin (Perfil: {pr
 if arquivos_up:
     
     # ---------------------------------------------------------
-    # FLUXO: VOO EM FORMATURA
+    # FLUXO 1: VOO EM FORMATURA
     # ---------------------------------------------------------
     if modo_analise == "Voo em Formatura (Líder e Ala)":
         if len(arquivos_up) != 2:
@@ -629,631 +648,492 @@ if arquivos_up:
                 if df_merge.empty:
                     st.error("❌ Os relógios não coincidem. Tente ajustar o 'Ajuste de Fuso do Ala' acima para -3 ou +3.")
                 else:
-                    aba_dist, aba_comp, aba_3d, aba_radar, aba_rel_form = st.tabs(["📏 1. DISTÂNCIA", "⚙️ 2. COMPARATIVO", "✈️ 3. TRAJETÓRIA 3D", "🎯 4. RADAR TÁTICO", "📄 5. RELATÓRIO FINAL"])
+                    aba_dist, aba_comp, aba_3d, aba_rel_form = st.tabs(["📏 1. DISTÂNCIA", "⚙️ 2. COMPARATIVO", "✈️ 3. TRAJETÓRIA 3D", "📄 4. RELATÓRIO FINAL"])
                     
+                    fig_dist = None
+                    fig_comp = None
+                    fig_3d = None
+
                     with aba_dist:
                         st.header("Análise de Distância na Formatura")
-                        st.markdown("Verifique em que exato momento e manobra o Ala se afastou ou se aproximou excessivamente do Líder.")
-                        
                         df_merge['Distancia_m'] = formula_haversine(
                             df_merge['Latitude_lider'], df_merge['Longitude_lider'], 
                             df_merge['Latitude_ala'], df_merge['Longitude_ala']
                         )
                         
-                        fig_dist = make_subplots(
-                            rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.08, 
-                            subplot_titles=("1. Distância Horizontal (Metros)", "2. Perfil de Altitude (ft)", "3. Atitude da Aeronave (Arfagem/Pitch º)")
-                        )
-                        
-                        fig_dist.add_trace(go.Scattergl(
-                            x=df_merge['Datetime'], y=df_merge['Distancia_m'], 
-                            name="Distância (m)", fill='tozeroy', fillcolor='rgba(149, 165, 166, 0.2)', 
-                            line=dict(color='#bdc3c7', width=2)
-                        ), row=1, col=1)
-                        
-                        if 'AltMSL_lider' in df_merge.columns: 
-                            fig_dist.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['AltMSL_lider'], name="Alt Líder", line=dict(color='#e67e22', width=2)), row=2, col=1)
-                        if 'AltMSL_ala' in df_merge.columns: 
-                            fig_dist.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['AltMSL_ala'], name="Alt Ala", line=dict(color='#3498db', width=2, dash='dot')), row=2, col=1)
-                            
-                        if 'Pitch_lider' in df_merge.columns: 
-                            fig_dist.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['Pitch_lider'], name="Pitch Líder", line=dict(color='#e67e22', width=2)), row=3, col=1)
-                        if 'Pitch_ala' in df_merge.columns: 
-                            fig_dist.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['Pitch_ala'], name="Pitch Ala", line=dict(color='#3498db', width=2, dash='dot')), row=3, col=1)
-
-                        fig_dist.update_xaxes(showspikes=True, spikecolor="white", spikesnap="cursor", spikemode="across", spikethickness=1, spikedash="dot")
+                        fig_dist = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.08, subplot_titles=("1. Distância Horizontal (Metros)", "2. Perfil de Altitude (ft)", "3. Atitude da Aeronave (Arfagem/Pitch º)"))
+                        fig_dist.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['Distancia_m'], name="Distância (m)", fill='tozeroy', fillcolor='rgba(149, 165, 166, 0.2)', line=dict(color='#bdc3c7', width=2)), row=1, col=1)
+                        if 'AltMSL_lider' in df_merge.columns: fig_dist.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['AltMSL_lider'], name="Alt Líder", line=dict(color='#e67e22', width=2)), row=2, col=1)
+                        if 'AltMSL_ala' in df_merge.columns: fig_dist.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['AltMSL_ala'], name="Alt Ala", line=dict(color='#3498db', width=2, dash='dot')), row=2, col=1)
+                        if 'Pitch_lider' in df_merge.columns: fig_dist.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['Pitch_lider'], name="Pitch Líder", line=dict(color='#e67e22', width=2)), row=3, col=1)
+                        if 'Pitch_ala' in df_merge.columns: fig_dist.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['Pitch_ala'], name="Pitch Ala", line=dict(color='#3498db', width=2, dash='dot')), row=3, col=1)
                         fig_dist.update_layout(template="plotly_dark", height=850, hovermode="x unified", margin=dict(l=10, r=10, t=30, b=10))
                         st.plotly_chart(fig_dist, use_container_width=True)
                         
                         st.subheader("🚨 Top 15 Momentos de Maior Afastamento")
                         df_top_dist = df_merge.sort_values(by='Distancia_m', ascending=False).head(15).copy()
-                        
                         df_formatada = pd.DataFrame()
                         df_formatada['Hora (Líder)'] = df_top_dist['Datetime'].dt.strftime('%H:%M:%S')
                         df_formatada['Distância (m)'] = df_top_dist['Distancia_m'].apply(lambda x: f"{x:.1f} m")
-                        if 'AltMSL_lider' in df_top_dist.columns: 
-                            df_formatada['Alt. Líder (ft)'] = df_top_dist['AltMSL_lider'].apply(lambda x: f"{x:.0f}")
-                        if 'Pitch_lider' in df_top_dist.columns: 
-                            df_formatada['Arfagem Líder (º)'] = df_top_dist['Pitch_lider'].apply(lambda x: f"{x:.1f}")
-                        
+                        if 'AltMSL_lider' in df_top_dist.columns: df_formatada['Alt. Líder (ft)'] = df_top_dist['AltMSL_lider'].apply(lambda x: f"{x:.0f}")
+                        if 'Pitch_lider' in df_top_dist.columns: df_formatada['Arfagem Líder (º)'] = df_top_dist['Pitch_lider'].apply(lambda x: f"{x:.1f}")
                         render_html_table(df_formatada)
 
                         st.divider()
-                        st.markdown("📝 **Observações - Distância** (Esses comentários irão para o Word)")
+                        st.markdown("📝 **Observações - Distância**")
                         st.session_state.obs_distancia = st.text_area("Escreva aqui:", value=st.session_state.obs_distancia, key='k_dist')
-                        if st.button("💾 Salvar Comentário", key="b_dist"): 
-                            st.success("Salvo com sucesso!")
+                        if st.button("💾 Salvar Comentário", key="b_dist"): st.success("Salvo com sucesso!")
 
                     with aba_comp:
                         st.header("Comparativo Dinâmico e Motores")
-                        st.markdown("Líder em **Laranja**, Ala em **Azul**.")
-                        
-                        fig_comp = make_subplots(
-                            rows=6, cols=1, shared_xaxes=True, vertical_spacing=0.03, 
-                            subplot_titles=("1. Altitude (ft) e Velocidade (kt)", "2. Força G", "3. Torque (Lbs)", "4. ITT (ºC)", "5. Ng (%)", "6. Nh (%)")
-                        )
-                        
-                        if 'AltMSL_lider' in df_merge.columns: 
-                            fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['AltMSL_lider'], name="Alt Líder", line=dict(color='#e67e22', width=2)), row=1, col=1)
-                        if 'AltMSL_ala' in df_merge.columns: 
-                            fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['AltMSL_ala'], name="Alt Ala", line=dict(color='#3498db', width=2, dash='dot')), row=1, col=1)
-                        
-                        if 'NormAc_lider' in df_merge.columns: 
-                            fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['NormAc_lider'], name="G Líder", line=dict(color='#e67e22', width=2)), row=2, col=1)
-                        if 'NormAc_ala' in df_merge.columns: 
-                            fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['NormAc_ala'], name="G Ala", line=dict(color='#3498db', width=2)), row=2, col=1)
-                        
-                        if 'E1 Torq ft lbs_lider' in df_merge.columns: 
-                            fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 Torq ft lbs_lider'], name="Tq Líder", line=dict(color='#e67e22', width=2)), row=3, col=1)
-                        if 'E1 Torq ft lbs_ala' in df_merge.columns: 
-                            fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 Torq ft lbs_ala'], name="Tq Ala", line=dict(color='#3498db', width=2)), row=3, col=1)
-                        
-                        if 'E1 ITT_lider' in df_merge.columns: 
-                            fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 ITT_lider'], name="ITT Líder", line=dict(color='#e67e22', width=2)), row=4, col=1)
-                        if 'E1 ITT_ala' in df_merge.columns: 
-                            fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 ITT_ala'], name="ITT Ala", line=dict(color='#3498db', width=2)), row=4, col=1)
-                        
-                        if 'E1 NG_lider' in df_merge.columns: 
-                            fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 NG_lider'], name="Ng Líder", line=dict(color='#e67e22', width=2)), row=5, col=1)
-                        if 'E1 NG_ala' in df_merge.columns: 
-                            fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 NG_ala'], name="Ng Ala", line=dict(color='#3498db', width=2)), row=5, col=1)
-                        
-                        if 'E1 NP %_lider' in df_merge.columns: 
-                            fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 NP %_lider'], name="Nh Líder", line=dict(color='#e67e22', width=2)), row=6, col=1)
-                        if 'E1 NP %_ala' in df_merge.columns: 
-                            fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 NP %_ala'], name="Nh Ala", line=dict(color='#3498db', width=2)), row=6, col=1)
-                        
-                        fig_comp.update_xaxes(showspikes=True, spikecolor="white", spikesnap="cursor", spikemode="across", spikethickness=1, spikedash="dot")
+                        fig_comp = make_subplots(rows=6, cols=1, shared_xaxes=True, vertical_spacing=0.03, subplot_titles=("1. Altitude (ft) e Velocidade (kt)", "2. Força G", "3. Torque (Lbs)", "4. ITT (ºC)", "5. Ng (%)", "6. Nh (%)"))
+                        if 'AltMSL_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['AltMSL_lider'], name="Alt Líder", line=dict(color='#e67e22', width=2)), row=1, col=1)
+                        if 'AltMSL_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['AltMSL_ala'], name="Alt Ala", line=dict(color='#3498db', width=2, dash='dot')), row=1, col=1)
+                        if 'NormAc_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['NormAc_lider'], name="G Líder", line=dict(color='#e67e22', width=2)), row=2, col=1)
+                        if 'NormAc_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['NormAc_ala'], name="G Ala", line=dict(color='#3498db', width=2)), row=2, col=1)
+                        if 'E1 Torq ft lbs_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 Torq ft lbs_lider'], name="Tq Líder", line=dict(color='#e67e22', width=2)), row=3, col=1)
+                        if 'E1 Torq ft lbs_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 Torq ft lbs_ala'], name="Tq Ala", line=dict(color='#3498db', width=2)), row=3, col=1)
+                        if 'E1 ITT_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 ITT_lider'], name="ITT Líder", line=dict(color='#e67e22', width=2)), row=4, col=1)
+                        if 'E1 ITT_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 ITT_ala'], name="ITT Ala", line=dict(color='#3498db', width=2)), row=4, col=1)
+                        if 'E1 NG_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 NG_lider'], name="Ng Líder", line=dict(color='#e67e22', width=2)), row=5, col=1)
+                        if 'E1 NG_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 NG_ala'], name="Ng Ala", line=dict(color='#3498db', width=2)), row=5, col=1)
+                        if 'E1 NP %_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 NP %_lider'], name="Nh Líder", line=dict(color='#e67e22', width=2)), row=6, col=1)
+                        if 'E1 NP %_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 NP %_ala'], name="Nh Ala", line=dict(color='#3498db', width=2)), row=6, col=1)
                         fig_comp.update_layout(template="plotly_dark", height=1200, hovermode="x unified", margin=dict(l=10, r=10, t=30, b=10))
                         st.plotly_chart(fig_comp, use_container_width=True)
 
                         st.divider()
                         st.markdown("📝 **Observações - Comparativo de Motores**")
                         st.session_state.obs_comparativo = st.text_area("Escreva aqui:", value=st.session_state.obs_comparativo, key='k_comp')
-                        if st.button("💾 Salvar Comentário", key="b_comp"): 
-                            st.success("Salvo com sucesso!")
+                        if st.button("💾 Salvar Comentário", key="b_comp"): st.success("Salvo com sucesso!")
 
                     with aba_3d:
                         st.header("Trajetória 3D Sincronizada")
                         fig_3d = go.Figure()
-                        fig_3d.add_trace(go.Scatter3d(
-                            x=df_merge['Longitude_lider'], y=df_merge['Latitude_lider'], z=df_merge['AltMSL_lider'], 
-                            mode='lines', line=dict(color='#e67e22', width=4), name="Líder (Laranja)"
-                        ))
-                        fig_3d.add_trace(go.Scatter3d(
-                            x=df_merge['Longitude_ala'], y=df_merge['Latitude_ala'], z=df_merge['AltMSL_ala'], 
-                            mode='lines', line=dict(color='#3498db', width=4), name="Ala (Azul)"
-                        ))
+                        fig_3d.add_trace(go.Scatter3d(x=df_merge['Longitude_lider'], y=df_merge['Latitude_lider'], z=df_merge['AltMSL_lider'], mode='lines', line=dict(color='#e67e22', width=4), name="Líder"))
+                        fig_3d.add_trace(go.Scatter3d(x=df_merge['Longitude_ala'], y=df_merge['Latitude_ala'], z=df_merge['AltMSL_ala'], mode='lines', line=dict(color='#3498db', width=4), name="Ala"))
                         fig_3d.update_layout(template="plotly_dark", height=700, margin=dict(l=0, r=0, b=0, t=20), scene=dict(aspectmode='auto'))
                         st.plotly_chart(fig_3d, use_container_width=True)
-                        
                         st.divider()
                         st.markdown("📝 **Observações - Trajetória 3D**")
                         st.session_state.obs_3d = st.text_area("Escreva aqui:", value=st.session_state.obs_3d, key='k_3d')
-                        if st.button("💾 Salvar Comentário", key="b_3d"): 
-                            st.success("Salvo com sucesso!")
-
-                    with aba_radar:
-                        st.header("🎯 Radar Tático de Posição Relativa")
-                        st.markdown("O **Líder** está fixo no centro do alvo (cruz laranja). Os pontos mostram o deslocamento em metros do **Ala** ao longo de todo o voo. Quanto mais afastado do centro, maior a dispersão da formatura.")
-                        
-                        # Conversão matemática de Latitude/Longitude para Metros Planos (projeção equiretangular aproximada)
-                        lat_media = np.radians(df_merge['Latitude_lider'].mean())
-                        df_merge['dx_m'] = (df_merge['Longitude_ala'] - df_merge['Longitude_lider']) * 111320 * np.cos(lat_media)
-                        df_merge['dy_m'] = (df_merge['Latitude_ala'] - df_merge['Latitude_lider']) * 111320
-                        
-                        fig_radar = go.Figure()
-                        
-                        # Plotando o Líder estático no centro geométrico (0,0)
-                        fig_radar.add_trace(go.Scatter(
-                            x=[0], y=[0], mode='markers+text', 
-                            marker=dict(color='#e67e22', size=18, symbol='cross'),
-                            text=["LÍDER"], textposition="top center", name="Líder",
-                            hoverinfo="skip"
-                        ))
-                        
-                        # Plotando o rastro de metros dispersos do Ala
-                        fig_radar.add_trace(go.Scatter(
-                            x=df_merge['dx_m'], y=df_merge['dy_m'], mode='markers',
-                            marker=dict(
-                                color=df_merge['AltMSL_ala'] if 'AltMSL_ala' in df_merge.columns else '#3498db', 
-                                colorscale='Viridis', 
-                                size=5, 
-                                showscale=True, 
-                                colorbar=dict(title="Altitude Ala (ft)", len=0.5, x=1.15)
-                            ),
-                            text=df_merge['Datetime'].dt.strftime('%H:%M:%S'),
-                            hovertemplate="Hora: %{text}<br>Deslocamento Lateral: %{x:.1f}m<br>Deslocamento Longitudinal: %{y:.1f}m<extra></extra>",
-                            name="Rastro do Ala"
-                        ))
-                        
-                        # Descobrir o limite do gráfico para mantê-lo num quadrado perfeito
-                        max_abs = max(df_merge['dx_m'].abs().max(), df_merge['dy_m'].abs().max())
-                        limite_radar = max_abs + 20 if pd.notnull(max_abs) else 100
-                        
-                        # Adicionando anéis virtuais de referência para distâncias em metros
-                        for raio in [20, 50, 100, 200, 500]:
-                            if raio < limite_radar:
-                                fig_radar.add_shape(type="circle", x0=-raio, y0=-raio, x1=raio, y1=raio, line=dict(color="rgba(255,255,255,0.1)", width=1, dash="dash"))
-                                fig_radar.add_annotation(x=0, y=raio, text=f"{raio}m", showarrow=False, yshift=10, font=dict(color="rgba(255,255,255,0.4)", size=10))
-                        
-                        fig_radar.update_layout(
-                            template="plotly_dark", height=800, width=800,
-                            xaxis=dict(title="⬅️ Ala à Esquerda (m) | Ala à Direita (m) ➡️", range=[-limite_radar, limite_radar], zeroline=True, zerolinecolor='rgba(255,255,255,0.4)', zerolinewidth=1),
-                            yaxis=dict(title="⬇️ Ala Atrás (m) | Ala à Frente (m) ⬆️", range=[-limite_radar, limite_radar], zeroline=True, zerolinecolor='rgba(255,255,255,0.4)', zerolinewidth=1, scaleanchor="x", scaleratio=1),
-                            showlegend=True,
-                            title="Visão de Topo (God's Eye View)",
-                            margin=dict(l=10, r=10, t=50, b=10)
-                        )
-                        st.plotly_chart(fig_radar, use_container_width=True)
-                        
-                        st.divider()
-                        st.markdown("📝 **Observações - Radar Tático**")
-                        st.session_state.obs_radar = st.text_area("Escreva aqui (Radar):", value=st.session_state.obs_radar, key='k_radar')
-                        if st.button("💾 Salvar Comentário", key="b_radar"): 
-                            st.success("Salvo com sucesso!")
+                        if st.button("💾 Salvar Comentário", key="b_3d"): st.success("Salvo com sucesso!")
 
                     with aba_rel_form:
                         st.header("📝 Editor do Relatório Final (Formatura)")
-                        st.markdown("Confirme ou edite os dados extraídos antes de gerar o Word.")
-                        
                         c1, c2 = st.columns(2)
                         with c1: lider_editado = st.text_input("Ficheiro Líder:", arq_lider)
                         with c2: ala_editado = st.text_input("Ficheiro Ala:", arq_ala)
                         
-                        st.info("As observações editadas nas outras abas serão incluídas automaticamente.")
-                        
                         obs_formatura_atual = {
                             "Posicionamento e Distancia": st.session_state.obs_distancia,
                             "Comparativo Dinamico (Motores)": st.session_state.obs_comparativo,
-                            "Trajetoria Espacial 3D": st.session_state.obs_3d,
-                            "Radar Tatico (Gods Eye View)": st.session_state.obs_radar
+                            "Trajetoria Espacial 3D": st.session_state.obs_3d
+                        }
+                        
+                        graficos_form = {
+                            "Análise de Distância Horizontal e Vertical": fig_dist,
+                            "Comparativo Dinâmico de Motores": fig_comp
                         }
                         
                         st.divider()
                         st.subheader("🖨️ Gerar Documento Word")
-                        docx_bytes_form_edit = gerar_docx_formatura_editado(lider_editado, ala_editado, obs_formatura_atual)
-                        st.download_button(
-                            label="💾 BAIXAR DOSSIÊ DE FORMATURA (.DOCX)", 
-                            data=docx_bytes_form_edit, 
-                            file_name="Dossie_Formatura.docx", 
-                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
-                            use_container_width=True
-                        )
+                        docx_bytes_form_edit = gerar_docx_formatura_editado(lider_editado, ala_editado, obs_formatura_atual, graficos_form)
+                        st.download_button(label="💾 BAIXAR DOSSIÊ DE FORMATURA (.DOCX)", data=docx_bytes_form_edit, file_name="Dossie_Formatura.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
 
     # ---------------------------------------------------------
-    # FLUXO: VOO SOLO E MULTIMOTOR
+    # FLUXO 2 E 3: VOO SOLO & COMPARATIVO DE MÁQUINA (TREND MONITORING)
     # ---------------------------------------------------------
     else:
-        df = processar_dados(arquivos_up[0].getvalue())
+        if len(arquivos_up) > 2:
+            st.warning("⚠️ Carregue apenas 1 ficheiro para Voo Solo, ou exatamente 2 ficheiros para Comparativo de Degradação (Trend Monitoring).")
         
-        max_g = df['NormAc'].max() if 'NormAc' in df.columns else 0
-        min_g = df['NormAc'].min() if 'NormAc' in df.columns else 0
-
-        alertas = []
-        
-        def add_alerta_contexto(coluna, valor, mensagem):
-            try:
-                row = df[df[coluna] == valor].iloc[0]
-                tempo = row['Datetime'].strftime('%H:%M:%S') if pd.notna(row['Datetime']) else 'N/A'
-                alt_val = row.get('AltMSL', np.nan)
-                vel_val = row.get('IAS', np.nan)
-                alt = f"{alt_val:.0f} ft" if pd.notna(alt_val) else 'N/A'
-                vel = f"{vel_val:.0f} nós" if pd.notna(vel_val) else 'N/A'
-                alertas.append(f"{mensagem} -> Ocorrência às {tempo} | Alt: {alt} | Vel: {vel}")
-            except: 
-                alertas.append(mensagem)
-
-        if l_g_max is not None and max_g >= l_g_max: 
-            add_alerta_contexto('NormAc', max_g, f"🔴 LINHA VERMELHA: Força G Positiva ({max_g:.2f}G)")
-        if l_g_min is not None and min_g <= l_g_min: 
-            add_alerta_contexto('NormAc', min_g, f"🔴 LINHA VERMELHA: Força G Negativa ({min_g:.2f}G)")
-        
-        # Regras de Negócios Restritas para T-27M
-        if projeto_atual == "T-27M (Oficial)":
-            max_torq = df['E1 Torq ft lbs'].max() if 'E1 Torq ft lbs' in df.columns else 0
-            max_itt = df['E1 ITT'].max() if 'E1 ITT' in df.columns else 0
-            max_ng = df['E1 NG'].max() if 'E1 NG' in df.columns else 0
-            max_nh = df['E1 NP %'].max() if 'E1 NP %' in df.columns else 0
-
-            if verificar_temporizador(df, 'E1 Torq ft lbs', 2100, 2): 
-                add_alerta_contexto('E1 Torq ft lbs', max_torq, f"🔴 OVER-TORQUE CRÍTICO: >2100 Lbs por 2 seg")
-            elif verificar_temporizador(df, 'E1 Torq ft lbs', 1970, 1): 
-                add_alerta_contexto('E1 Torq ft lbs', max_torq, f"🔴 OVER-TORQUE: Passou de 1970 Lbs")
-            elif l_tq_red is not None and max_torq >= l_tq_red: 
-                add_alerta_contexto('E1 Torq ft lbs', max_torq, f"🔴 LINHA VERMELHA Torque: {max_torq:.0f} Lbs")
-            elif l_tq_yel is not None and max_torq >= l_tq_yel: 
-                add_alerta_contexto('E1 Torq ft lbs', max_torq, f"🟡 ARCO AMARELO Torque: {max_torq:.0f} Lbs")
+        # --- FLUXO COMPARATIVO DE MÁQUINA (NOVO) ---
+        elif len(arquivos_up) == 2:
+            st.markdown("### 🔄 Comparativo de Degradação / Performance (Trend Monitoring)")
+            st.markdown("Avalie a diferença de comportamento do mesmo motor em datas diferentes, ou compare duas aeronaves distintas cumprindo o mesmo perfil de voo.")
             
-            if verificar_temporizador(df, 'E1 NG', 102.6, 6): 
-                add_alerta_contexto('E1 NG', max_ng, f"🔴 NG CRÍTICO: >102.6% por 6 seg")
-            elif verificar_temporizador(df, 'E1 NG', 101.6, 1): 
-                add_alerta_contexto('E1 NG', max_ng, f"🔴 LINHA VERMELHA Ng: Passou de 101.6%")
-            elif l_ng_red is not None and max_ng >= l_ng_red: 
-                add_alerta_contexto('E1 NG', max_ng, f"🔴 LINHA VERMELHA Ng: {max_ng:.1f}%")
-            elif l_ng_yel is not None and max_ng >= l_ng_yel: 
-                add_alerta_contexto('E1 NG', max_ng, f"🟡 ARCO AMARELO Ng: {max_ng:.1f}%")
+            nome_arqA = arquivos_up[0].name
+            nome_arqB = arquivos_up[1].name
             
-            if verificar_temporizador(df, 'E1 ITT', 850, 2): 
-                add_alerta_contexto('E1 ITT', max_itt, f"🔴 SUPER AQUECIMENTO ITT: >850ºC por 2 seg")
-            elif verificar_temporizador(df, 'E1 ITT', 790, 1): 
-                add_alerta_contexto('E1 ITT', max_itt, f"🔴 LINHA VERMELHA ITT: Passou de 790ºC")
-            elif l_itt_yel is not None and max_itt >= l_itt_yel: 
-                add_alerta_contexto('E1 ITT', max_itt, f"🟡 ARCO AMARELO ITT: {max_itt:.0f} ºC")
-            
-            if verificar_temporizador(df, 'E1 NP %', 110, 1): 
-                add_alerta_contexto('E1 NP %', max_nh, f"🔴 OVERSPEED HÉLICE CRÍTICO: >110%")
-            elif verificar_temporizador(df, 'E1 NP %', 106, 1): 
-                add_alerta_contexto('E1 NP %', max_nh, f"🔴 OVERSPEED HÉLICE: >106%")
-            elif l_nh_red is not None and max_nh >= l_nh_red: 
-                add_alerta_contexto('E1 NP %', max_nh, f"🔴 LINHA VERMELHA Nh: {max_nh:.1f}%")
-            elif l_nh_yel is not None and max_nh >= l_nh_yel: 
-                add_alerta_contexto('E1 NP %', max_nh, f"🟡 ARCO AMARELO Nh: {max_nh:.1f}%")
-        
-        # Regras Gerais para Multimotores / Outras Aeronaves
+            colA, colB = st.columns(2)
+            with colA: arq_A = st.selectbox("Voo A (Antigo / Referência):", [nome_arqA, nome_arqB], index=0)
+            with colB: 
+                idx_padrao_b = 1 if arq_A == nome_arqA else 0
+                arq_B = st.selectbox("Voo B (Recente / Avaliado):", [nome_arqA, nome_arqB], index=idx_padrao_b)
+
+            if arq_A == arq_B:
+                st.error("⚠️ Você selecionou o mesmo ficheiro para Voo A e Voo B.")
+            else:
+                idx_A = 0 if arq_A == nome_arqA else 1
+                idx_B = 1 if idx_A == 0 else 0
+                
+                dfA = processar_dados(arquivos_up[idx_A].getvalue())
+                dfB = processar_dados(arquivos_up[idx_B].getvalue())
+                
+                dfA['Minutos'] = calcular_minutos_voo(dfA)
+                dfB['Minutos'] = calcular_minutos_voo(dfB)
+
+                st.sidebar.markdown("---")
+                st.sidebar.success("✅ **Comparativo Carregado**")
+                
+                aba_resumo_comp, aba_graf_comp, aba_rel_comp = st.tabs(["📊 1. TABELA DE TENDÊNCIA (DELTAS)", "📈 2. GRÁFICOS SOBREPOSTOS", "📄 3. RELATÓRIO FINAL"])
+
+                df_metricas = pd.DataFrame(columns=['Parâmetro', 'Voo A', 'Voo B', 'Variação (Delta)'])
+                def add_metric(param_name, col_name, is_min=False, e_forca_g=False):
+                    if col_name in dfA.columns and col_name in dfB.columns:
+                        valA = dfA[col_name].min() if is_min else dfA[col_name].max()
+                        valB = dfB[col_name].min() if is_min else dfB[col_name].max()
+                        diff = valB - valA
+                        sinal = "+" if diff > 0 else ""
+                        fmt = "{:.2f}" if e_forca_g else "{:.0f}"
+                        if param_name.startswith("Ng") or param_name.startswith("Nh"): fmt = "{:.1f}"
+                        df_metricas.loc[len(df_metricas)] = [param_name, fmt.format(valA), fmt.format(valB), f"{sinal}{fmt.format(diff)}"]
+
+                add_metric("Força G Máxima (G)", "NormAc", False, True)
+                add_metric("Força G Mínima (G)", "NormAc", True, True)
+                for i in range(1, qtd_motores_config + 1):
+                    add_metric(f"Torque Máx Motor {i} (Lbs)", f"E{i} Torq ft lbs")
+                    add_metric(f"Temp ITT Máx Motor {i} (ºC)", f"E{i} ITT")
+                    add_metric(f"Ng Máx Motor {i} (%)", f"E{i} NG")
+                    add_metric(f"Nh Máx Motor {i} (%)", f"E{i} NP %")
+                    add_metric(f"Temp Óleo Máx Motor {i} (ºC)", f"E{i} OilT_Celsius")
+
+                fig_trend = None
+
+                with aba_resumo_comp:
+                    st.header("Auditoria de Diferenças (Picos da Missão)")
+                    st.markdown("Valores com variação positiva (+), como aumento na temperatura (ITT) ou esforço excessivo para o mesmo Torque, podem indicar início de **degradação da Seção Quente (Hot Section)**.")
+                    render_html_table(df_metricas, height=350)
+                    
+                    st.divider()
+                    st.markdown("📝 **Parecer Técnico - Deltas**")
+                    st.session_state.obs_resumo = st.text_area("Escreva aqui:", value=st.session_state.obs_resumo, key='k_comp_resumo')
+                    if st.button("💾 Salvar Comentário", key="b_comp_res"): st.success("Salvo!")
+
+                with aba_graf_comp:
+                    st.header("Gráficos de Comportamento Sobrepostos")
+                    st.markdown("Os dois voos estão **alinhados no tempo zero** (instante da decolagem). O Voo A é Laranja escuro, o Voo B é Azul.")
+                    
+                    fig_trend = make_subplots(rows=4, cols=1, shared_xaxes=True, vertical_spacing=0.04, subplot_titles=("1. Perfil de Altitude e Velocidade", "2. Torque do Motor 1 (Lbs)", "3. Temperatura ITT Motor 1 (ºC)", "4. Rotação Ng Motor 1 (%)"))
+                    
+                    corA = '#d35400'
+                    corB = '#3498db'
+
+                    if 'AltMSL' in dfA.columns: fig_trend.add_trace(go.Scattergl(x=dfA['Minutos'], y=dfA['AltMSL'], name="Alt Voo A", line=dict(color=corA, width=2, dash='dot')), row=1, col=1)
+                    if 'AltMSL' in dfB.columns: fig_trend.add_trace(go.Scattergl(x=dfB['Minutos'], y=dfB['AltMSL'], name="Alt Voo B", line=dict(color=corB, width=2)), row=1, col=1)
+                    if 'E1 Torq ft lbs' in dfA.columns: fig_trend.add_trace(go.Scattergl(x=dfA['Minutos'], y=dfA['E1 Torq ft lbs'], name="Tq Voo A", line=dict(color=corA, width=2)), row=2, col=1)
+                    if 'E1 Torq ft lbs' in dfB.columns: fig_trend.add_trace(go.Scattergl(x=dfB['Minutos'], y=dfB['E1 Torq ft lbs'], name="Tq Voo B", line=dict(color=corB, width=2)), row=2, col=1)
+                    if 'E1 ITT' in dfA.columns: fig_trend.add_trace(go.Scattergl(x=dfA['Minutos'], y=dfA['E1 ITT'], name="ITT Voo A", line=dict(color=corA, width=2)), row=3, col=1)
+                    if 'E1 ITT' in dfB.columns: fig_trend.add_trace(go.Scattergl(x=dfB['Minutos'], y=dfB['E1 ITT'], name="ITT Voo B", line=dict(color=corB, width=2)), row=3, col=1)
+                    if 'E1 NG' in dfA.columns: fig_trend.add_trace(go.Scattergl(x=dfA['Minutos'], y=dfA['E1 NG'], name="Ng Voo A", line=dict(color=corA, width=2)), row=4, col=1)
+                    if 'E1 NG' in dfB.columns: fig_trend.add_trace(go.Scattergl(x=dfB['Minutos'], y=dfB['E1 NG'], name="Ng Voo B", line=dict(color=corB, width=2)), row=4, col=1)
+
+                    fig_trend.update_layout(template="plotly_dark", height=900, hovermode="x unified", xaxis4_title="Tempo de Voo (Minutos)", margin=dict(l=10, r=10, t=30, b=10))
+                    st.plotly_chart(fig_trend, use_container_width=True)
+
+                    st.divider()
+                    st.markdown("📝 **Parecer Técnico - Gráficos e Comportamento**")
+                    st.session_state.obs_graficos = st.text_area("Escreva aqui:", value=st.session_state.obs_graficos, key='k_comp_graficos')
+                    if st.button("💾 Salvar Comentário", key="b_comp_graf"): st.success("Salvo!")
+
+                with aba_rel_comp:
+                    st.header("📝 Gerar Relatório de Trend Monitoring")
+                    st.markdown("Os cálculos de Variação (Delta) e as imagens dos gráficos serão exportados para o documento oficial.")
+                    
+                    obs_comp_atual = {
+                        "Resumo de Degradacao e Picos (Deltas)": st.session_state.obs_resumo,
+                        "Analise Comportamental Grafica": st.session_state.obs_graficos
+                    }
+                    
+                    graficos_trend = {
+                        "Comparativo de Performance (Voo A vs Voo B)": fig_trend
+                    }
+                    
+                    st.divider()
+                    docx_bytes_comp = gerar_docx_comparativo_editado(arq_A, arq_B, df_metricas, obs_comp_atual, graficos_trend)
+                    st.download_button(
+                        label="💾 BAIXAR RELATÓRIO DE DEGRADAÇÃO (.DOCX)", 
+                        data=docx_bytes_comp, 
+                        file_name="Comparativo_Degradacao.docx", 
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
+                        use_container_width=True
+                    )
+
+
+        # --- FLUXO VOO SOLO ORIGINAL ---
         else:
+            df = processar_dados(arquivos_up[0].getvalue())
+            
+            max_g = df['NormAc'].max() if 'NormAc' in df.columns else 0
+            min_g = df['NormAc'].min() if 'NormAc' in df.columns else 0
+            alertas = []
+            
+            def add_alerta_contexto(coluna, valor, mensagem):
+                try:
+                    row = df[df[coluna] == valor].iloc[0]
+                    tempo = row['Datetime'].strftime('%H:%M:%S') if pd.notna(row['Datetime']) else 'N/A'
+                    alt_val = row.get('AltMSL', np.nan)
+                    vel_val = row.get('IAS', np.nan)
+                    alt = f"{alt_val:.0f} ft" if pd.notna(alt_val) else 'N/A'
+                    vel = f"{vel_val:.0f} nós" if pd.notna(vel_val) else 'N/A'
+                    alertas.append(f"{mensagem} -> Ocorrência às {tempo} | Alt: {alt} | Vel: {vel}")
+                except: 
+                    alertas.append(mensagem)
+
+            if l_g_max is not None and max_g >= l_g_max: add_alerta_contexto('NormAc', max_g, f"🔴 LINHA VERMELHA: Força G Positiva ({max_g:.2f}G)")
+            if l_g_min is not None and min_g <= l_g_min: add_alerta_contexto('NormAc', min_g, f"🔴 LINHA VERMELHA: Força G Negativa ({min_g:.2f}G)")
+            
+            if projeto_atual == "T-27M (Oficial)":
+                max_torq = df['E1 Torq ft lbs'].max() if 'E1 Torq ft lbs' in df.columns else 0
+                max_itt = df['E1 ITT'].max() if 'E1 ITT' in df.columns else 0
+                max_ng = df['E1 NG'].max() if 'E1 NG' in df.columns else 0
+                max_nh = df['E1 NP %'].max() if 'E1 NP %' in df.columns else 0
+
+                if verificar_temporizador(df, 'E1 Torq ft lbs', 2100, 2): add_alerta_contexto('E1 Torq ft lbs', max_torq, f"🔴 OVER-TORQUE CRÍTICO: >2100 Lbs por 2 seg")
+                elif verificar_temporizador(df, 'E1 Torq ft lbs', 1970, 1): add_alerta_contexto('E1 Torq ft lbs', max_torq, f"🔴 OVER-TORQUE: Passou de 1970 Lbs")
+                elif l_tq_red is not None and max_torq >= l_tq_red: add_alerta_contexto('E1 Torq ft lbs', max_torq, f"🔴 LINHA VERMELHA Torque: {max_torq:.0f} Lbs")
+                elif l_tq_yel is not None and max_torq >= l_tq_yel: add_alerta_contexto('E1 Torq ft lbs', max_torq, f"🟡 ARCO AMARELO Torque: {max_torq:.0f} Lbs")
+                
+                if verificar_temporizador(df, 'E1 NG', 102.6, 6): add_alerta_contexto('E1 NG', max_ng, f"🔴 NG CRÍTICO: >102.6% por 6 seg")
+                elif verificar_temporizador(df, 'E1 NG', 101.6, 1): add_alerta_contexto('E1 NG', max_ng, f"🔴 LINHA VERMELHA Ng: Passou de 101.6%")
+                elif l_ng_red is not None and max_ng >= l_ng_red: add_alerta_contexto('E1 NG', max_ng, f"🔴 LINHA VERMELHA Ng: {max_ng:.1f}%")
+                elif l_ng_yel is not None and max_ng >= l_ng_yel: add_alerta_contexto('E1 NG', max_ng, f"🟡 ARCO AMARELO Ng: {max_ng:.1f}%")
+                
+                if verificar_temporizador(df, 'E1 ITT', 850, 2): add_alerta_contexto('E1 ITT', max_itt, f"🔴 SUPER AQUECIMENTO ITT: >850ºC por 2 seg")
+                elif verificar_temporizador(df, 'E1 ITT', 790, 1): add_alerta_contexto('E1 ITT', max_itt, f"🔴 LINHA VERMELHA ITT: Passou de 790ºC")
+                elif l_itt_yel is not None and max_itt >= l_itt_yel: add_alerta_contexto('E1 ITT', max_itt, f"🟡 ARCO AMARELO ITT: {max_itt:.0f} ºC")
+                
+                if verificar_temporizador(df, 'E1 NP %', 110, 1): add_alerta_contexto('E1 NP %', max_nh, f"🔴 OVERSPEED HÉLICE CRÍTICO: >110%")
+                elif verificar_temporizador(df, 'E1 NP %', 106, 1): add_alerta_contexto('E1 NP %', max_nh, f"🔴 OVERSPEED HÉLICE: >106%")
+                elif l_nh_red is not None and max_nh >= l_nh_red: add_alerta_contexto('E1 NP %', max_nh, f"🔴 LINHA VERMELHA Nh: {max_nh:.1f}%")
+                elif l_nh_yel is not None and max_nh >= l_nh_yel: add_alerta_contexto('E1 NP %', max_nh, f"🟡 ARCO AMARELO Nh: {max_nh:.1f}%")
+            else:
+                for i_mot in range(1, qtd_motores_config + 1):
+                    m_torq = df[f'E{i_mot} Torq ft lbs'].max() if f'E{i_mot} Torq ft lbs' in df.columns else 0
+                    m_itt = df[f'E{i_mot} ITT'].max() if f'E{i_mot} ITT' in df.columns else 0
+                    m_ng = df[f'E{i_mot} NG'].max() if f'E{i_mot} NG' in df.columns else 0
+                    m_nh = df[f'E{i_mot} NP %'].max() if f'E{i_mot} NP %' in df.columns else 0
+                    
+                    if l_tq_red is not None and m_torq >= l_tq_red: add_alerta_contexto(f'E{i_mot} Torq ft lbs', m_torq, f"🔴 Motor {i_mot} LINHA VERMELHA Torque: {m_torq:.0f} Lbs")
+                    elif l_tq_yel is not None and m_torq >= l_tq_yel: add_alerta_contexto(f'E{i_mot} Torq ft lbs', m_torq, f"🟡 Motor {i_mot} ARCO AMARELO Torque: {m_torq:.0f} Lbs")
+                    if l_ng_red is not None and m_ng >= l_ng_red: add_alerta_contexto(f'E{i_mot} NG', m_ng, f"🔴 Motor {i_mot} LINHA VERMELHA Ng: {m_ng:.1f}%")
+                    elif l_ng_yel is not None and m_ng >= l_ng_yel: add_alerta_contexto(f'E{i_mot} NG', m_ng, f"🟡 Motor {i_mot} ARCO AMARELO Ng: {m_ng:.1f}%")
+                    if l_itt_red is not None and m_itt >= l_itt_red: add_alerta_contexto(f'E{i_mot} ITT', m_itt, f"🔴 Motor {i_mot} LINHA VERMELHA ITT: {m_itt:.0f} ºC")
+                    elif l_itt_yel is not None and m_itt >= l_itt_yel: add_alerta_contexto(f'E{i_mot} ITT', m_itt, f"🟡 Motor {i_mot} ARCO AMARELO ITT: {m_itt:.0f} ºC")
+                    if l_nh_red is not None and m_nh >= l_nh_red: add_alerta_contexto(f'E{i_mot} NP %', m_nh, f"🔴 Motor {i_mot} LINHA VERMELHA Nh: {m_nh:.1f}%")
+                    elif l_nh_yel is not None and m_nh >= l_nh_yel: add_alerta_contexto(f'E{i_mot} NP %', m_nh, f"🟡 Motor {i_mot} ARCO AMARELO Nh: {m_nh:.1f}%")
+
             for i_mot in range(1, qtd_motores_config + 1):
-                m_torq = df[f'E{i_mot} Torq ft lbs'].max() if f'E{i_mot} Torq ft lbs' in df.columns else 0
-                m_itt = df[f'E{i_mot} ITT'].max() if f'E{i_mot} ITT' in df.columns else 0
-                m_ng = df[f'E{i_mot} NG'].max() if f'E{i_mot} NG' in df.columns else 0
-                m_nh = df[f'E{i_mot} NP %'].max() if f'E{i_mot} NP %' in df.columns else 0
-                
-                if l_tq_red is not None and m_torq >= l_tq_red: add_alerta_contexto(f'E{i_mot} Torq ft lbs', m_torq, f"🔴 Motor {i_mot} LINHA VERMELHA Torque: {m_torq:.0f} Lbs")
-                elif l_tq_yel is not None and m_torq >= l_tq_yel: add_alerta_contexto(f'E{i_mot} Torq ft lbs', m_torq, f"🟡 Motor {i_mot} ARCO AMARELO Torque: {m_torq:.0f} Lbs")
-                
-                if l_ng_red is not None and m_ng >= l_ng_red: add_alerta_contexto(f'E{i_mot} NG', m_ng, f"🔴 Motor {i_mot} LINHA VERMELHA Ng: {m_ng:.1f}%")
-                elif l_ng_yel is not None and m_ng >= l_ng_yel: add_alerta_contexto(f'E{i_mot} NG', m_ng, f"🟡 Motor {i_mot} ARCO AMARELO Ng: {m_ng:.1f}%")
-                
-                if l_itt_red is not None and m_itt >= l_itt_red: add_alerta_contexto(f'E{i_mot} ITT', m_itt, f"🔴 Motor {i_mot} LINHA VERMELHA ITT: {m_itt:.0f} ºC")
-                elif l_itt_yel is not None and m_itt >= l_itt_yel: add_alerta_contexto(f'E{i_mot} ITT', m_itt, f"🟡 Motor {i_mot} ARCO AMARELO ITT: {m_itt:.0f} ºC")
-                
-                if l_nh_red is not None and m_nh >= l_nh_red: add_alerta_contexto(f'E{i_mot} NP %', m_nh, f"🔴 Motor {i_mot} LINHA VERMELHA Nh: {m_nh:.1f}%")
-                elif l_nh_yel is not None and m_nh >= l_nh_yel: add_alerta_contexto(f'E{i_mot} NP %', m_nh, f"🟡 Motor {i_mot} ARCO AMARELO Nh: {m_nh:.1f}%")
+                m_oilt = df[f'E{i_mot} OilT_Celsius'].max() if f'E{i_mot} OilT_Celsius' in df.columns else 0
+                m_oilp = df[f'E{i_mot} OilP'].max() if f'E{i_mot} OilP' in df.columns else 0
+                if l_oilt_red is not None and m_oilt >= l_oilt_red: add_alerta_contexto(f'E{i_mot} OilT_Celsius', m_oilt, f"🔴 Motor {i_mot} LINHA VERMELHA Temp Óleo: {m_oilt:.0f} ºC")
+                if l_oilp_red is not None and m_oilp >= l_oilp_red: add_alerta_contexto(f'E{i_mot} OilP', m_oilp, f"🔴 Motor {i_mot} LINHA VERMELHA Pressão Óleo: {m_oilp:.0f} PSI")
 
-        # Regras de Temperatura/Pressão do Óleo (Aplicadas a todos os motores do perfil)
-        for i_mot in range(1, qtd_motores_config + 1):
-            m_oilt = df[f'E{i_mot} OilT_Celsius'].max() if f'E{i_mot} OilT_Celsius' in df.columns else 0
-            m_oilp = df[f'E{i_mot} OilP'].max() if f'E{i_mot} OilP' in df.columns else 0
-            
-            if l_oilt_red is not None and m_oilt >= l_oilt_red: add_alerta_contexto(f'E{i_mot} OilT_Celsius', m_oilt, f"🔴 Motor {i_mot} LINHA VERMELHA Temp Óleo: {m_oilt:.0f} ºC")
-            if l_oilp_red is not None and m_oilp >= l_oilp_red: add_alerta_contexto(f'E{i_mot} OilP', m_oilp, f"🔴 Motor {i_mot} LINHA VERMELHA Pressão Óleo: {m_oilp:.0f} PSI")
-
-        tempos = {'acionamento': '-', 'decolagem': '-', 'pouso': '-', 'corte': '-', 't_voo': '-'}
-        
-        # Ajuste dinâmico para Helicópteros ou Aviões no Gatilho de Motor
-        if tipo_projeto == "Asa Rotativa":
-            motor_on = df[(df.get('E1 NG', pd.Series([0])) > 15) & (df['Datetime'].notna())]
-            if not motor_on.empty:
-                tempos['acionamento'] = motor_on.iloc[0]['Datetime'].strftime('%H:%M:%S')
-                tempos['corte'] = motor_on.iloc[-1]['Datetime'].strftime('%H:%M:%S')
-                tempos['decolagem'] = tempos['acionamento']
-                tempos['pouso'] = tempos['corte']
-                tempos['t_voo'] = str(motor_on.iloc[-1]['Datetime'] - motor_on.iloc[0]['Datetime']).split('.')[0]
-            voo_ativo = motor_on
-        else:
-            if 'E1 NG' in df.columns:
-                motor_on = df[(df['E1 NG'] > 10) & (df['Datetime'].notna())]
+            tempos = {'acionamento': '-', 'decolagem': '-', 'pouso': '-', 'corte': '-', 't_voo': '-'}
+            if tipo_projeto == "Asa Rotativa":
+                motor_on = df[(df.get('E1 NG', pd.Series([0])) > 15) & (df['Datetime'].notna())]
                 if not motor_on.empty:
                     tempos['acionamento'] = motor_on.iloc[0]['Datetime'].strftime('%H:%M:%S')
                     tempos['corte'] = motor_on.iloc[-1]['Datetime'].strftime('%H:%M:%S')
-            
-            if 'IAS' in df.columns:
-                voo_ativo = df[(df['IAS'] > 50) & (df['Datetime'].notna())]
-                if not voo_ativo.empty:
-                    tempos['decolagem'] = voo_ativo.iloc[0]['Datetime'].strftime('%H:%M:%S')
-                    tempos['pouso'] = voo_ativo.iloc[-1]['Datetime'].strftime('%H:%M:%S')
-                    tempos['t_voo'] = str(voo_ativo.iloc[-1]['Datetime'] - voo_ativo.iloc[0]['Datetime']).split('.')[0]
+                    tempos['decolagem'] = tempos['acionamento']
+                    tempos['pouso'] = tempos['corte']
+                    tempos['t_voo'] = str(motor_on.iloc[-1]['Datetime'] - motor_on.iloc[0]['Datetime']).split('.')[0]
+                voo_ativo = motor_on
             else:
-                voo_ativo = pd.DataFrame()
+                if 'E1 NG' in df.columns:
+                    motor_on = df[(df['E1 NG'] > 10) & (df['Datetime'].notna())]
+                    if not motor_on.empty:
+                        tempos['acionamento'] = motor_on.iloc[0]['Datetime'].strftime('%H:%M:%S')
+                        tempos['corte'] = motor_on.iloc[-1]['Datetime'].strftime('%H:%M:%S')
+                if 'IAS' in df.columns:
+                    voo_ativo = df[(df['IAS'] > 50) & (df['Datetime'].notna())]
+                    if not voo_ativo.empty:
+                        tempos['decolagem'] = voo_ativo.iloc[0]['Datetime'].strftime('%H:%M:%S')
+                        tempos['pouso'] = voo_ativo.iloc[-1]['Datetime'].strftime('%H:%M:%S')
+                        tempos['t_voo'] = str(voo_ativo.iloc[-1]['Datetime'] - voo_ativo.iloc[0]['Datetime']).split('.')[0]
+                else:
+                    voo_ativo = pd.DataFrame()
 
-        st.sidebar.markdown("---")
-        st.sidebar.success("✅ **Análise Carregada**")
+            st.sidebar.markdown("---")
+            st.sidebar.success("✅ **Análise Carregada**")
 
-        aba_didatica, aba_inspetoria, aba_manobras, aba_relatorio = st.tabs(["🎓 1. RESUMO DE PAINEL", "⚙️ 2. INSPETORIA E GRÁFICOS", "🛩️ 3. AVALIADOR DE MANOBRAS", "📄 4. RELATÓRIO FINAL"])
+            aba_didatica, aba_inspetoria, aba_manobras, aba_relatorio = st.tabs(["🎓 1. RESUMO DE PAINEL", "⚙️ 2. INSPETORIA E GRÁFICOS", "🛩️ 3. AVALIADOR DE MANOBRAS", "📄 4. RELATÓRIO FINAL"])
 
-        with aba_didatica:
-            st.header(f"🎯 Resumo de Picos - {projeto_atual}")
-            c1, c2, c3, c4 = st.columns(4)
-            
-            with c1:
-                exibir_card_arcos("Força G Máxima", max_g, l_g_max, None, None, "G", ":.2f")
-                max_ng = df['E1 NG'].max() if 'E1 NG' in df.columns else 0
-                exibir_card_arcos("Gerador de Gás (Ng)", max_ng, l_ng_red, l_ng_yel, None, "%", ":.1f")
-            with c2:
-                exibir_card_arcos("Força G Mínima", min_g, l_g_min, None, None, "G", ":.2f", e_minimo=True)
-                max_nh = df['E1 NP %'].max() if 'E1 NP %' in df.columns else 0
-                exibir_card_arcos("Hélice (Nh)", max_nh, l_nh_red, l_nh_yel, None, "%", ":.1f")
-            with c3:
-                max_torq = df['E1 Torq ft lbs'].max() if 'E1 Torq ft lbs' in df.columns else 0
-                exibir_card_arcos("Torque Máximo", max_torq, l_tq_red, l_tq_yel, None, "Lbs", ":.0f")
-                max_oilt = df['E1 OilT_Celsius'].max() if 'E1 OilT_Celsius' in df.columns else 0
-                exibir_card_arcos("Temp. Óleo (OilT)", max_oilt, l_oilt_red, None, l_oilt_min, "ºC", ":.0f")
-            with c4:
-                max_itt = df['E1 ITT'].max() if 'E1 ITT' in df.columns else 0
-                exibir_card_arcos("Temperatura ITT", max_itt, l_itt_red, l_itt_yel, None, "ºC", ":.0f")
-                max_oilp = df['E1 OilP'].max() if 'E1 OilP' in df.columns else 0
-                exibir_card_arcos("Pressão Óleo (OilP)", max_oilp, l_oilp_red, None, l_oilp_min, "PSI", ":.0f")
-                
-            if qtd_motores_config > 1:
-                st.caption(f"*Valores do Motor 1 no painel. O rastreio dos {qtd_motores_config} motores está detalhado na aba de Inspetoria.*")
+            fig_dash = None
 
-            st.divider()
-            st.subheader("🗺️ Área de Instrução (Rota e Google Earth)")
-            df_mapa = df[(df['IAS'] > 30)].dropna(subset=['Latitude', 'Longitude'])
-            if not df_mapa.empty:
-                fig_map = go.Figure()
-                fig_map.add_trace(go.Scattermap(
-                    lat=df_mapa['Latitude'], lon=df_mapa['Longitude'], 
-                    mode='lines', line=dict(width=4, color='#3498db')
-                ))
-                fig_map.add_trace(go.Scattermap(
-                    lat=[df_mapa['Latitude'].iloc[0]], lon=[df_mapa['Longitude'].iloc[0]], 
-                    mode='markers', marker=dict(size=14, color='#2ecc71')
-                ))
-                fig_map.add_trace(go.Scattermap(
-                    lat=[df_mapa['Latitude'].iloc[-1]], lon=[df_mapa['Longitude'].iloc[-1]], 
-                    mode='markers', marker=dict(size=14, color='#e74c3c')
-                ))
-                fig_map.update_layout(
-                    map_style="carto-darkmatter", map_zoom=8, 
-                    map_center={"lat": df_mapa['Latitude'].mean(), "lon": df_mapa['Longitude'].mean()}, 
-                    margin={"r":0,"t":0,"l":0,"b":0}, height=400, showlegend=False
-                )
-                st.plotly_chart(fig_map, use_container_width=True)
-                
-                # Geração do arquivo KML tridimensional compatível com o Google Earth (Absolute)
-                kml = simplekml.Kml()
-                linestring = kml.newlinestring(
-                    name="Trajetoria de Voo 3D", 
-                    coords=[(r['Longitude'], r['Latitude'], r['AltMSL'] * 0.3048) for i, r in df_mapa.iterrows()]
-                )
-                linestring.altitudemode = simplekml.AltitudeMode.absolute
-                linestring.style.linestyle.color = simplekml.Color.cyan
-                linestring.style.linestyle.width = 4
-
-                ponto_inicio = kml.newpoint(
-                    name="Início da Missão",
-                    coords=[(df_mapa['Longitude'].iloc[0], df_mapa['Latitude'].iloc[0], df_mapa['AltMSL'].iloc[0] * 0.3048)]
-                )
-                ponto_inicio.altitudemode = simplekml.AltitudeMode.absolute
-                ponto_inicio.style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/grn-circle.png"
-
-                ponto_fim = kml.newpoint(
-                    name="Término / Pouso",
-                    coords=[(df_mapa['Longitude'].iloc[-1], df_mapa['Latitude'].iloc[-1], df_mapa['AltMSL'].iloc[-1] * 0.3048)]
-                )
-                ponto_fim.altitudemode = simplekml.AltitudeMode.absolute
-                ponto_fim.style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/red-circle.png"
-                
-                st.download_button("⬇️ Baixar Rota 3D (Google Earth .KML)", data=kml.kml(), file_name="rota_voo.kml", mime="application/vnd.google-earth.kml+xml")
-
-            st.divider()
-            st.markdown("📝 **Observações - Resumo de Painel e Rota**")
-            st.session_state.obs_resumo = st.text_area("Escreva aqui:", value=st.session_state.obs_resumo, key='k_res')
-            if st.button("💾 Salvar Comentário", key="b_res"): 
-                st.success("Salvo com sucesso!")
-
-        with aba_inspetoria:
-            st.subheader("Auditoria de Zonas Amarelas e Vermelhas")
-            if len(alertas) > 0:
-                for a in alertas:
-                    if "LINHA VERMELHA" in a or "CRÍTICO" in a: 
-                        st.error(a)
-                    else: 
-                        st.warning(a)
-            else:
-                st.success("✅ Voo totalmente dentro dos parâmetros Verdes.")
-                
-            st.divider()
-            st.subheader("🔍 Investigação de Eventos")
-            c_busca1, c_busca2, c_busca3 = st.columns([2, 1, 1])
-            opcoes_busca = {
-                'Força G': 'NormAc', 'Torque M1': 'E1 Torq ft lbs', 'ITT M1': 'E1 ITT', 
-                'Ng M1 (%)': 'E1 NG', 'Nh M1 (%)': 'E1 NP %', 'Temp. Óleo M1': 'E1 OilT_Celsius', 
-                'Pressão Óleo M1': 'E1 OilP', 'Velocidade': 'IAS', 'Altitude': 'AltMSL', 
-                'Arfagem (Pitch)': 'Pitch', 'Rolagem (Roll)': 'Roll'
-            }
-            if qtd_motores_config > 1:
-                opcoes_busca.update({
-                    'Torque M2': 'E2 Torq ft lbs', 'ITT M2': 'E2 ITT',
-                    'Ng M2 (%)': 'E2 NG', 'Nh M2 (%)': 'E2 NP %',
-                    'Temp. Óleo M2': 'E2 OilT_Celsius', 'Pressão Óleo M2': 'E2 OilP'
-                })
-            
-            with c_busca1: 
-                escolha = st.selectbox("Parâmetro:", list(opcoes_busca.keys()))
-            with c_busca2: 
-                operador = st.selectbox("Condição:", ["Maior que >", "Menor que <"])
-            with c_busca3: 
-                valor = st.number_input("Valor:", value=3.0)
-                
-            coluna_filtro = opcoes_busca[escolha]
-            if coluna_filtro in df.columns:
-                resultado_busca = df[df[coluna_filtro] > valor] if operador == "Maior que >" else df[df[coluna_filtro] < valor]
-                if not resultado_busca.empty:
-                    colunas_ver = ['Lcl Time', 'AltMSL', 'IAS', 'NormAc', 'Pitch', 'Roll']
-                    for j in range(1, qtd_motores_config + 1):
-                        colunas_ver.extend([f'E{j} Torq ft lbs', f'E{j} ITT', f'E{j} NG', f'E{j} NP %', f'E{j} OilT_Celsius', f'E{j} OilP'])
-                    colunas_ver = [c for c in colunas_ver if c in df.columns]
-                    exibir_tabela_grande(resultado_busca[colunas_ver].head(20).copy())
-                else: 
-                    st.info("Nenhum evento encontrado.")
-
-            st.divider()
-            st.subheader("📈 Dashboard de Dinâmica e Motor")
-            
-            fig = make_subplots(
-                rows=6, cols=1, shared_xaxes=True, vertical_spacing=0.03, 
-                specs=[[{"secondary_y": True}], [{"secondary_y": False}], [{"secondary_y": False}], [{"secondary_y": False}], [{"secondary_y": False}], [{"secondary_y": False}]], 
-                subplot_titles=("1. Altitude e Velocidade", "2. Força G", "3. Torque (Lbs)", "4. Temperatura ITT (ºC)", "5. Gerador de Gás - Ng (%)", "6. Rotação da Hélice - Nh (%)")
-            )
-            
-            cores_motores = ['#27ae60', '#f1c40f', '#e67e22', '#8e44ad']
-            cores_itt = ['#f39c12', '#e74c3c', '#d35400', '#c0392b']
-            cores_ng = ['#9b59b6', '#3498db', '#1abc9c', '#e67e22']
-            cores_nh = ['#f1c40f', '#2ecc71', '#34495e', '#bdc3c7']
-            
-            if 'AltMSL' in df.columns: 
-                fig.add_trace(go.Scattergl(x=df['Datetime'], y=df['AltMSL'], name="Altitude (ft)", fill='tozeroy', fillcolor='rgba(52, 152, 219, 0.1)', line=dict(color='#3498db', width=2)), row=1, col=1, secondary_y=False)
-            if 'IAS' in df.columns: 
-                fig.add_trace(go.Scattergl(x=df['Datetime'], y=df['IAS'], name="Velocidade (kt)", line=dict(color='#00d2d3', width=2)), row=1, col=1, secondary_y=True)
-                
-            if 'NormAc' in df.columns: 
-                fig.add_trace(go.Scattergl(x=df['Datetime'], y=df['NormAc'], name="Força G", fill='tozeroy', fillcolor='rgba(231, 76, 60, 0.1)', line=dict(color='#e74c3c', width=2)), row=2, col=1)
-                if l_g_max is not None: 
-                    fig.add_hline(y=l_g_max, line_dash="dash", line_color="red", row=2, col=1)
+            with aba_didatica:
+                st.header(f"🎯 Resumo de Picos - {projeto_atual}")
+                c1, c2, c3, c4 = st.columns(4)
+                with c1:
+                    exibir_card_arcos("Força G Máxima", max_g, l_g_max, None, None, "G", ":.2f")
+                    max_ng = df['E1 NG'].max() if 'E1 NG' in df.columns else 0
+                    exibir_card_arcos("Gerador de Gás (Ng)", max_ng, l_ng_red, l_ng_yel, None, "%", ":.1f")
+                with c2:
+                    exibir_card_arcos("Força G Mínima", min_g, l_g_min, None, None, "G", ":.2f", e_minimo=True)
+                    max_nh = df['E1 NP %'].max() if 'E1 NP %' in df.columns else 0
+                    exibir_card_arcos("Hélice (Nh)", max_nh, l_nh_red, l_nh_yel, None, "%", ":.1f")
+                with c3:
+                    max_torq = df['E1 Torq ft lbs'].max() if 'E1 Torq ft lbs' in df.columns else 0
+                    exibir_card_arcos("Torque Máximo", max_torq, l_tq_red, l_tq_yel, None, "Lbs", ":.0f")
+                    max_oilt = df['E1 OilT_Celsius'].max() if 'E1 OilT_Celsius' in df.columns else 0
+                    exibir_card_arcos("Temp. Óleo (OilT)", max_oilt, l_oilt_red, None, l_oilt_min, "ºC", ":.0f")
+                with c4:
+                    max_itt = df['E1 ITT'].max() if 'E1 ITT' in df.columns else 0
+                    exibir_card_arcos("Temperatura ITT", max_itt, l_itt_red, l_itt_yel, None, "ºC", ":.0f")
+                    max_oilp = df['E1 OilP'].max() if 'E1 OilP' in df.columns else 0
+                    exibir_card_arcos("Pressão Óleo (OilP)", max_oilp, l_oilp_red, None, l_oilp_min, "PSI", ":.0f")
                     
-            for i_m in range(1, qtd_motores_config + 1):
-                col_tq = f'E{i_m} Torq ft lbs'
-                if col_tq in df.columns: 
-                    fig.add_trace(go.Scattergl(x=df['Datetime'], y=df[col_tq], name=f"Tq M{i_m}", line=dict(color=cores_motores[i_m-1], width=2)), row=3, col=1)
-            if l_tq_red is not None: fig.add_hline(y=l_tq_red, line_dash="dash", line_color="red", row=3, col=1)
-            if l_tq_yel is not None and l_tq_red is not None and l_tq_yel != l_tq_red: fig.add_hrect(y0=l_tq_yel, y1=l_tq_red, fillcolor="rgba(241, 196, 15, 0.2)", layer="below", line_width=0, row=3, col=1)
-                    
-            for i_m in range(1, qtd_motores_config + 1):
-                col_itt = f'E{i_m} ITT'
-                if col_itt in df.columns: 
-                    fig.add_trace(go.Scattergl(x=df['Datetime'], y=df[col_itt], name=f"ITT M{i_m}", line=dict(color=cores_itt[i_m-1], width=2)), row=4, col=1)
-            if l_itt_red is not None: fig.add_hline(y=l_itt_red, line_dash="dash", line_color="red", row=4, col=1)
-            if l_itt_yel is not None and l_itt_red is not None: fig.add_hrect(y0=l_itt_yel, y1=l_itt_red, fillcolor="rgba(241, 196, 15, 0.2)", layer="below", line_width=0, row=4, col=1)
-                    
-            for i_m in range(1, qtd_motores_config + 1):
-                col_ng = f'E{i_m} NG'
-                if col_ng in df.columns:
-                    fig.add_trace(go.Scattergl(x=df['Datetime'], y=df[col_ng], name=f"Ng M{i_m} (%)", line=dict(color=cores_ng[i_m-1], width=2)), row=5, col=1)
-            if l_ng_red is not None: fig.add_hline(y=l_ng_red, line_dash="dash", line_color="red", row=5, col=1)
-            if l_ng_yel is not None and l_ng_red is not None: fig.add_hrect(y0=l_ng_yel, y1=l_ng_red, fillcolor="rgba(241, 196, 15, 0.2)", layer="below", line_width=0, row=5, col=1)
-                    
-            for i_m in range(1, qtd_motores_config + 1):
-                col_nh = f'E{i_m} NP %'
-                if col_nh in df.columns:
-                    fig.add_trace(go.Scattergl(x=df['Datetime'], y=df[col_nh], name=f"Nh M{i_m} (%)", line=dict(color=cores_nh[i_m-1], width=2)), row=6, col=1)
-            if l_nh_red is not None: fig.add_hline(y=l_nh_red, line_dash="dash", line_color="red", row=6, col=1)
-            if l_nh_yel is not None and l_nh_red is not None: fig.add_hrect(y0=l_nh_yel, y1=l_nh_red, fillcolor="rgba(241, 196, 15, 0.2)", layer="below", line_width=0, row=6, col=1)
-            
-            fig.update_xaxes(showspikes=True, spikecolor="white", spikesnap="cursor", spikemode="across", spikethickness=1, spikedash="dot")
-            fig.update_yaxes(showspikes=True, spikecolor="gray", spikethickness=1, spikedash="dot")
-            
-            fig.update_layout(
-                template="plotly_dark", height=1200, 
-                hovermode="x unified", margin=dict(l=10, r=10, t=30, b=10), 
-                legend=dict(title="Sensores", orientation="v", yanchor="top", y=1, xanchor="left", x=1.02, bgcolor="rgba(0,0,0,0.5)")
-            )
-            st.plotly_chart(fig, use_container_width=True)
+                if qtd_motores_config > 1: st.caption(f"*Valores do Motor 1 no painel. O rastreio dos {qtd_motores_config} motores está detalhado na aba de Inspetoria.*")
 
-            st.divider()
-            st.markdown("📝 **Observações - Inspetoria e Gráficos**")
-            st.session_state.obs_graficos = st.text_area("Escreva aqui:", value=st.session_state.obs_graficos, key='k_graf')
-            if st.button("💾 Salvar Comentário", key="b_graf"): 
-                st.success("Salvo com sucesso!")
-
-        with aba_manobras:
-            c_m1, c_m2 = st.columns(2)
-            with c_m1:
-                st.subheader("🛬 Avaliador de Pouso")
-                if 'IAS' in df.columns and 'AltMSL' in df.columns and not voo_ativo.empty:
-                    fase_final = voo_ativo.tail(300) 
-                    pico_g_pouso = fase_final['NormAc'].max()
-                    vel_aprox = fase_final['IAS'].mean()
+                st.divider()
+                st.subheader("🗺️ Área de Instrução (Rota e Google Earth)")
+                df_mapa = df[(df['IAS'] > 30)].dropna(subset=['Latitude', 'Longitude'])
+                if not df_mapa.empty:
+                    fig_map_temp = go.Figure()
+                    fig_map_temp.add_trace(go.Scattermap(lat=df_mapa['Latitude'], lon=df_mapa['Longitude'], mode='lines', line=dict(width=4, color='#3498db')))
+                    fig_map_temp.add_trace(go.Scattermap(lat=[df_mapa['Latitude'].iloc[0]], lon=[df_mapa['Longitude'].iloc[0]], mode='markers', marker=dict(size=14, color='#2ecc71')))
+                    fig_map_temp.add_trace(go.Scattermap(lat=[df_mapa['Latitude'].iloc[-1]], lon=[df_mapa['Longitude'].iloc[-1]], mode='markers', marker=dict(size=14, color='#e74c3c')))
+                    fig_map_temp.update_layout(map_style="carto-darkmatter", map_zoom=8, map_center={"lat": df_mapa['Latitude'].mean(), "lon": df_mapa['Longitude'].mean()}, margin={"r":0,"t":0,"l":0,"b":0}, height=400, showlegend=False)
+                    st.plotly_chart(fig_map_temp, use_container_width=True)
                     
-                    st.info(f"**Velocidade Média na Aproximação Final:** {vel_aprox:.1f} nós (kt)")
-                    if pico_g_pouso > 2.0: 
-                        st.error(f"🔴 **Impacto Duro:** {pico_g_pouso:.2f}G no toque.")
-                    elif pico_g_pouso > 1.5: 
-                        st.warning(f"🟡 **Pouso Firme:** {pico_g_pouso:.2f}G na pista.")
-                    else: 
-                        st.success(f"✅ **Pouso Suave:** {pico_g_pouso:.2f}G.")
-            with c_m2:
-                st.subheader("🤸 Isolador Automático de Acrobacias")
-                if 'Pitch' in df.columns and 'Roll' in df.columns:
-                    df_acro = df[(df['Pitch'] > 45) | (df['Pitch'] < -45) | (df['Roll'] > 60) | (df['Roll'] < -60)]
-                    if not df_acro.empty:
-                        st.markdown(f"**Atitudes anormais:** {len(df_acro)} momentos.")
-                        colunas_acro = ['Lcl Time', 'AltMSL', 'IAS', 'Pitch', 'Roll', 'NormAc']
-                        for j in range(1, qtd_motores_config + 1):
-                            colunas_acro.extend([f'E{j} Torq ft lbs', f'E{j} ITT', f'E{j} NG', f'E{j} NP %'])
-                        colunas_acro = [c for c in colunas_acro if c in df.columns]
-                        exibir_tabela_grande(df_acro.sort_values(by='NormAc', ascending=False).head(20)[colunas_acro].copy())
-                    else: 
-                        st.info("Nenhuma manobra severa detectada.")
+                    kml = simplekml.Kml()
+                    linestring = kml.newlinestring(name="Trajetoria de Voo 3D", coords=[(r['Longitude'], r['Latitude'], r['AltMSL'] * 0.3048) for i, r in df_mapa.iterrows()])
+                    linestring.altitudemode = simplekml.AltitudeMode.absolute
+                    linestring.style.linestyle.color = simplekml.Color.cyan
+                    linestring.style.linestyle.width = 4
+                    st.download_button("⬇️ Baixar Rota 3D (Google Earth .KML)", data=kml.kml(), file_name="rota_voo.kml", mime="application/vnd.google-earth.kml+xml")
+
+                st.divider()
+                st.markdown("📝 **Observações - Resumo de Painel e Rota**")
+                st.session_state.obs_resumo = st.text_area("Escreva aqui:", value=st.session_state.obs_resumo, key='k_res')
+                if st.button("💾 Salvar Comentário", key="b_res"): st.success("Salvo com sucesso!")
+
+            with aba_inspetoria:
+                st.subheader("Auditoria de Zonas Amarelas e Vermelhas")
+                if len(alertas) > 0:
+                    for a in alertas:
+                        if "LINHA VERMELHA" in a or "CRÍTICO" in a: st.error(a)
+                        else: st.warning(a)
+                else:
+                    st.success("✅ Voo totalmente dentro dos parâmetros Verdes.")
+                    
+                st.divider()
+                st.subheader("🔍 Investigação de Eventos")
+                c_busca1, c_busca2, c_busca3 = st.columns([2, 1, 1])
+                opcoes_busca = {'Força G': 'NormAc', 'Torque M1': 'E1 Torq ft lbs', 'ITT M1': 'E1 ITT', 'Ng M1 (%)': 'E1 NG', 'Nh M1 (%)': 'E1 NP %', 'Temp. Óleo M1': 'E1 OilT_Celsius', 'Pressão Óleo M1': 'E1 OilP', 'Velocidade': 'IAS', 'Altitude': 'AltMSL', 'Arfagem (Pitch)': 'Pitch', 'Rolagem (Roll)': 'Roll'}
+                if qtd_motores_config > 1: opcoes_busca.update({'Torque M2': 'E2 Torq ft lbs', 'ITT M2': 'E2 ITT', 'Ng M2 (%)': 'E2 NG', 'Nh M2 (%)': 'E2 NP %', 'Temp. Óleo M2': 'E2 OilT_Celsius', 'Pressão Óleo M2': 'E2 OilP'})
+                
+                with c_busca1: escolha = st.selectbox("Parâmetro:", list(opcoes_busca.keys()))
+                with c_busca2: operador = st.selectbox("Condição:", ["Maior que >", "Menor que <"])
+                with c_busca3: valor = st.number_input("Valor:", value=3.0)
+                    
+                coluna_filtro = opcoes_busca[escolha]
+                if coluna_filtro in df.columns:
+                    resultado_busca = df[df[coluna_filtro] > valor] if operador == "Maior que >" else df[df[coluna_filtro] < valor]
+                    if not resultado_busca.empty:
+                        colunas_ver = ['Lcl Time', 'AltMSL', 'IAS', 'NormAc', 'Pitch', 'Roll']
+                        for j in range(1, qtd_motores_config + 1): colunas_ver.extend([f'E{j} Torq ft lbs', f'E{j} ITT', f'E{j} NG', f'E{j} NP %', f'E{j} OilT_Celsius', f'E{j} OilP'])
+                        colunas_ver = [c for c in colunas_ver if c in df.columns]
+                        exibir_tabela_grande(resultado_busca[colunas_ver].head(20).copy())
+                    else: st.info("Nenhum evento encontrado.")
+
+                st.divider()
+                st.subheader("📈 Dashboard de Dinâmica e Motor")
+                fig_dash = make_subplots(rows=6, cols=1, shared_xaxes=True, vertical_spacing=0.03, specs=[[{"secondary_y": True}], [{"secondary_y": False}], [{"secondary_y": False}], [{"secondary_y": False}], [{"secondary_y": False}], [{"secondary_y": False}]], subplot_titles=("1. Altitude e Velocidade", "2. Força G", "3. Torque (Lbs)", "4. Temperatura ITT (ºC)", "5. Gerador de Gás - Ng (%)", "6. Rotação da Hélice - Nh (%)"))
+                cores_motores = ['#27ae60', '#f1c40f', '#e67e22', '#8e44ad']
+                cores_itt = ['#f39c12', '#e74c3c', '#d35400', '#c0392b']
+                cores_ng = ['#9b59b6', '#3498db', '#1abc9c', '#e67e22']
+                cores_nh = ['#f1c40f', '#2ecc71', '#34495e', '#bdc3c7']
+                
+                if 'AltMSL' in df.columns: fig_dash.add_trace(go.Scattergl(x=df['Datetime'], y=df['AltMSL'], name="Altitude (ft)", fill='tozeroy', fillcolor='rgba(52, 152, 219, 0.1)', line=dict(color='#3498db', width=2)), row=1, col=1, secondary_y=False)
+                if 'IAS' in df.columns: fig_dash.add_trace(go.Scattergl(x=df['Datetime'], y=df['IAS'], name="Velocidade (kt)", line=dict(color='#00d2d3', width=2)), row=1, col=1, secondary_y=True)
+                if 'NormAc' in df.columns: fig_dash.add_trace(go.Scattergl(x=df['Datetime'], y=df['NormAc'], name="Força G", fill='tozeroy', fillcolor='rgba(231, 76, 60, 0.1)', line=dict(color='#e74c3c', width=2)), row=2, col=1)
+                if l_g_max is not None: fig_dash.add_hline(y=l_g_max, line_dash="dash", line_color="red", row=2, col=1)
                         
-            st.divider()
-            st.subheader("✈️ Trajetória 3D de Acrobacias (Cor por Velocidade)")
-            if not voo_ativo.empty and 'Latitude' in voo_ativo.columns and 'Longitude' in voo_ativo.columns:
-                df_3d = voo_ativo.dropna(subset=['Latitude', 'Longitude', 'AltMSL'])
+                for i_m in range(1, qtd_motores_config + 1):
+                    if f'E{i_m} Torq ft lbs' in df.columns: fig_dash.add_trace(go.Scattergl(x=df['Datetime'], y=df[f'E{i_m} Torq ft lbs'], name=f"Tq M{i_m}", line=dict(color=cores_motores[i_m-1], width=2)), row=3, col=1)
+                    if f'E{i_m} ITT' in df.columns: fig_dash.add_trace(go.Scattergl(x=df['Datetime'], y=df[f'E{i_m} ITT'], name=f"ITT M{i_m}", line=dict(color=cores_itt[i_m-1], width=2)), row=4, col=1)
+                    if f'E{i_m} NG' in df.columns: fig_dash.add_trace(go.Scattergl(x=df['Datetime'], y=df[f'E{i_m} NG'], name=f"Ng M{i_m} (%)", line=dict(color=cores_ng[i_m-1], width=2)), row=5, col=1)
+                    if f'E{i_m} NP %' in df.columns: fig_dash.add_trace(go.Scattergl(x=df['Datetime'], y=df[f'E{i_m} NP %'], name=f"Nh M{i_m} (%)", line=dict(color=cores_nh[i_m-1], width=2)), row=6, col=1)
                 
-                fig_3d = go.Figure(data=[go.Scatter3d(
-                    x=df_3d['Longitude'], y=df_3d['Latitude'], z=df_3d['AltMSL'], 
-                    mode='lines', 
-                    line=dict(color=df_3d['IAS'], colorscale='Turbo', width=4, colorbar=dict(title="Velocidade IAS", len=0.5, x=1.1))
-                )])
-                fig_3d.update_layout(template="plotly_dark", height=600, margin=dict(l=0, r=0, b=0, t=20), scene=dict(aspectmode='auto'))
-                st.plotly_chart(fig_3d, use_container_width=True)
+                if l_tq_red is not None: fig_dash.add_hline(y=l_tq_red, line_dash="dash", line_color="red", row=3, col=1)
+                if l_itt_red is not None: fig_dash.add_hline(y=l_itt_red, line_dash="dash", line_color="red", row=4, col=1)
+                if l_ng_red is not None: fig_dash.add_hline(y=l_ng_red, line_dash="dash", line_color="red", row=5, col=1)
+                if l_nh_red is not None: fig_dash.add_hline(y=l_nh_red, line_dash="dash", line_color="red", row=6, col=1)
+                
+                fig_dash.update_layout(template="plotly_dark", height=1200, hovermode="x unified", margin=dict(l=10, r=10, t=30, b=10), legend=dict(title="Sensores", orientation="v", yanchor="top", y=1, xanchor="left", x=1.02, bgcolor="rgba(0,0,0,0.5)"))
+                st.plotly_chart(fig_dash, use_container_width=True)
 
-            st.divider()
-            st.markdown("📝 **Observações - Avaliador de Manobras e Pouso**")
-            st.session_state.obs_manobras = st.text_area("Escreva aqui:", value=st.session_state.obs_manobras, key='k_manob')
-            if st.button("💾 Salvar Comentário", key="b_manob"): 
-                st.success("Salvo com sucesso!")
+                st.divider()
+                st.markdown("📝 **Observações - Inspetoria e Gráficos**")
+                st.session_state.obs_graficos = st.text_area("Escreva aqui:", value=st.session_state.obs_graficos, key='k_graf')
+                if st.button("💾 Salvar Comentário", key="b_graf"): st.success("Salvo com sucesso!")
 
-        with aba_relatorio:
-            st.header("📝 Editor do Relatório Final")
-            st.markdown("Confirme ou edite os dados extraídos antes de gerar o documento Word oficial.")
+            with aba_manobras:
+                c_m1, c_m2 = st.columns(2)
+                with c_m1:
+                    st.subheader("🛬 Avaliador de Pouso")
+                    if 'IAS' in df.columns and 'AltMSL' in df.columns and not voo_ativo.empty:
+                        fase_final = voo_ativo.tail(300) 
+                        pico_g_pouso = fase_final['NormAc'].max()
+                        vel_aprox = fase_final['IAS'].mean()
+                        st.info(f"**Velocidade Média na Aproximação Final:** {vel_aprox:.1f} nós (kt)")
+                        if pico_g_pouso > 2.0: st.error(f"🔴 **Impacto Duro:** {pico_g_pouso:.2f}G no toque.")
+                        elif pico_g_pouso > 1.5: st.warning(f"🟡 **Pouso Firme:** {pico_g_pouso:.2f}G na pista.")
+                        else: st.success(f"✅ **Pouso Suave:** {pico_g_pouso:.2f}G.")
+                with c_m2:
+                    st.subheader("🤸 Isolador Automático de Acrobacias")
+                    if 'Pitch' in df.columns and 'Roll' in df.columns:
+                        df_acro = df[(df['Pitch'] > 45) | (df['Pitch'] < -45) | (df['Roll'] > 60) | (df['Roll'] < -60)]
+                        if not df_acro.empty:
+                            st.markdown(f"**Atitudes anormais:** {len(df_acro)} momentos.")
+                            colunas_acro = ['Lcl Time', 'AltMSL', 'IAS', 'Pitch', 'Roll', 'NormAc']
+                            for j in range(1, qtd_motores_config + 1): colunas_acro.extend([f'E{j} Torq ft lbs', f'E{j} ITT', f'E{j} NG', f'E{j} NP %'])
+                            colunas_acro = [c for c in colunas_acro if c in df.columns]
+                            exibir_tabela_grande(df_acro.sort_values(by='NormAc', ascending=False).head(20)[colunas_acro].copy())
+                        else: st.info("Nenhuma manobra severa detectada.")
+                            
+                st.divider()
+                st.subheader("✈️ Trajetória 3D de Acrobacias (Cor por Velocidade)")
+                if not voo_ativo.empty and 'Latitude' in voo_ativo.columns and 'Longitude' in voo_ativo.columns:
+                    df_3d = voo_ativo.dropna(subset=['Latitude', 'Longitude', 'AltMSL'])
+                    fig_3d_temp = go.Figure(data=[go.Scatter3d(x=df_3d['Longitude'], y=df_3d['Latitude'], z=df_3d['AltMSL'], mode='lines', line=dict(color=df_3d['IAS'], colorscale='Turbo', width=4, colorbar=dict(title="Velocidade IAS", len=0.5, x=1.1)))])
+                    fig_3d_temp.update_layout(template="plotly_dark", height=600, margin=dict(l=0, r=0, b=0, t=20), scene=dict(aspectmode='auto'))
+                    st.plotly_chart(fig_3d_temp, use_container_width=True)
 
-            st.subheader("1. Edição do Logbook da Missão")
-            col_t1, col_t2, col_t3, col_t4, col_t5 = st.columns(5)
-            with col_t1: temp_ac = st.text_input("Acionamento:", tempos.get('acionamento','-'))
-            with col_t2: temp_dec = st.text_input("Decolagem:", tempos.get('decolagem','-'))
-            with col_t3: temp_pou = st.text_input("Pouso:", tempos.get('pouso','-'))
-            with col_t4: temp_cor = st.text_input("Corte:", tempos.get('corte','-'))
-            with col_t5: temp_voo = st.text_input("Tempo de Voo:", tempos.get('t_voo','-'))
-            
-            tempos_editados = {
-                'acionamento': temp_ac,
-                'decolagem': temp_dec,
-                'pouso': temp_pou,
-                'corte': temp_cor,
-                't_voo': temp_voo
-            }
+                st.divider()
+                st.markdown("📝 **Observações - Avaliador de Manobras e Pouso**")
+                st.session_state.obs_manobras = st.text_area("Escreva aqui:", value=st.session_state.obs_manobras, key='k_manob')
+                if st.button("💾 Salvar Comentário", key="b_manob"): st.success("Salvo com sucesso!")
 
-            st.subheader("2. Edição de Alertas do Voo")
-            st.caption("Pode apagar linhas falsas ou reescrever motivos. (Mantenha o texto 🔴 ou 🟡 para o Word aplicar a cor).")
-            alertas_txt = st.text_area("Lista de Alertas (Um por linha):", value="\n".join(alertas), height=150)
+            with aba_relatorio:
+                st.header("📝 Editor do Relatório Final")
+                st.subheader("1. Edição do Logbook da Missão")
+                col_t1, col_t2, col_t3, col_t4, col_t5 = st.columns(5)
+                with col_t1: temp_ac = st.text_input("Acionamento:", tempos.get('acionamento','-'))
+                with col_t2: temp_dec = st.text_input("Decolagem:", tempos.get('decolagem','-'))
+                with col_t3: temp_pou = st.text_input("Pouso:", tempos.get('pouso','-'))
+                with col_t4: temp_cor = st.text_input("Corte:", tempos.get('corte','-'))
+                with col_t5: temp_voo = st.text_input("Tempo de Voo:", tempos.get('t_voo','-'))
+                tempos_editados = {'acionamento': temp_ac, 'decolagem': temp_dec, 'pouso': temp_pou, 'corte': temp_cor, 't_voo': temp_voo}
 
-            st.info("As observações (Campo 3) digitadas e salvas nas outras abas serão incluídas automaticamente no documento final.")
-            obs_solo_atual = {
-                "Resumo de Painel e Rota": st.session_state.obs_resumo,
-                "Inspetoria e Graficos": st.session_state.obs_graficos,
-                "Avaliador de Manobras e Pouso": st.session_state.obs_manobras
-            }
+                st.subheader("2. Edição de Alertas do Voo")
+                alertas_txt = st.text_area("Lista de Alertas (Um por linha):", value="\n".join(alertas), height=150)
+                
+                obs_solo_atual = {
+                    "Resumo de Painel e Rota": st.session_state.obs_resumo, 
+                    "Inspetoria e Graficos": st.session_state.obs_graficos, 
+                    "Avaliador de Manobras e Pouso": st.session_state.obs_manobras
+                }
+                
+                graficos_solo = {
+                    "Dashboard de Inspeção de Motores e Dinâmica": fig_dash
+                }
 
-            st.divider()
-            st.subheader("🖨️ Gerar Documento Word")
-            docx_bytes_solo_editado = gerar_docx_solo_editado(tempos_editados, alertas_txt, obs_solo_atual)
-            st.download_button(
-                label="💾 BAIXAR RELATÓRIO OFICIAL (.DOCX)", 
-                data=docx_bytes_solo_editado, 
-                file_name="Inspetoria_Relatorio.docx", 
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
-                use_container_width=True
-            )
+                st.divider()
+                st.subheader("🖨️ Gerar Documento Word")
+                st.info("As observações e os **gráficos da análise** serão automaticamente injetados no documento Word com alta resolução.")
+                
+                docx_bytes_solo_editado = gerar_docx_solo_editado(tempos_editados, alertas_txt, obs_solo_atual, graficos_solo)
+                st.download_button(label="💾 BAIXAR RELATÓRIO OFICIAL (.DOCX)", data=docx_bytes_solo_editado, file_name="Inspetoria_Relatorio.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
