@@ -15,12 +15,10 @@ import streamlit.components.v1 as components
 # ==========================================
 # 0. SISTEMA DE LOGIN E CADASTRO (SaaS)
 # ==========================================
-import json
-import os
+st.set_page_config(page_title="Telemetria", layout="wide")
 
 ARQUIVO_USUARIOS = "banco_usuarios.json"
 
-# Carrega os usuários salvos ou cria o seu usuário master inicial estruturado
 def carregar_usuarios():
     if os.path.exists(ARQUIVO_USUARIOS):
         try:
@@ -51,7 +49,6 @@ if "usuario_logado" not in st.session_state:
 if "nome_logado" not in st.session_state:
     st.session_state.nome_logado = None
 
-# Tela de bloqueio e formulários
 if st.session_state.usuario_logado is None:
     st.markdown("<br><br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -60,7 +57,6 @@ if st.session_state.usuario_logado is None:
         st.title("🔒 Plataforma Telemetria")
         st.caption("Sistema Comercial de Telemetria e Inspetoria de Voo")
         
-        # Cria abas separadas para entrar ou criar conta
         aba_login, aba_cadastro = st.tabs(["Fazer Login", "Criar Nova Conta"])
         
         with aba_login:
@@ -72,7 +68,6 @@ if st.session_state.usuario_logado is None:
                 if usuario_input in usuarios_permitidos:
                     dados_usuario = usuarios_permitidos[usuario_input]
                     
-                    # Compatibilidade (verifica se é o formato antigo ou o novo formato completo)
                     senha_correta = False
                     if isinstance(dados_usuario, str) and dados_usuario == senha_input:
                         senha_correta = True
@@ -105,7 +100,6 @@ if st.session_state.usuario_logado is None:
                 elif not novo_usuario or not nova_senha or not novo_nome or not novo_email:
                     st.warning("⚠️ Preencha todos os campos obrigatórios (Nome, E-mail, Usuário e Senha).")
                 else:
-                    # Estrutura profissional de dados do cliente (Futuro CRM)
                     usuarios_permitidos[novo_usuario] = {
                         "senha": nova_senha,
                         "nome": novo_nome,
@@ -116,63 +110,36 @@ if st.session_state.usuario_logado is None:
                     salvar_usuarios(usuarios_permitidos)
                     st.success(f"✅ Conta de {novo_nome} criada com sucesso! Pode ir à aba de Login para aceder.")
                     
-    st.stop() # Bloqueia o carregamento do resto do site
+    st.stop()
+
 
 # ==========================================
-# PAINEL DO USUÁRIO LOGADO (Barra Lateral)
+# 1. GERENCIADOR DE PERFIS INDIVIDUAIS DO CLIENTE
 # ==========================================
-st.sidebar.markdown(f"👤 **Mecânico:** `{st.session_state.nome_logado}`")
-if st.sidebar.button("Sair (Logout)"):
-    st.session_state.usuario_logado = None
-    st.session_state.nome_logado = None
-    st.rerun()
-
-# Ajuste automático do ficheiro de perfis para cada cliente:
 ARQUIVO_PERFIS = f"perfis_{st.session_state.usuario_logado}.json"
 
-
-# ==========================================
-# 1. CONFIGURAÇÃO E GERENCIADOR DE PERFIS
-# ==========================================
-st.set_page_config(page_title="Telemetria AFA", layout="wide")
-
-ARQUIVO_PERFIS = f"perfis_{st.session_state.usuario_logado}.json"
 PERFIS_PADRAO = {
     "T-27M (Oficial)": {
         "tipo_aeronave": "Asa Fixa",
         "qtd_motores": 1,
-        "g_max": 3.0, 
-        "g_min": -1.5,
-        "tq_red": 1795.0, 
-        "tq_yel": 1795.0,
-        "itt_red": 790.0, 
-        "itt_yel": 740.0,
-        "ng_red": 101.5, 
-        "ng_yel": 100.0,
-        "nh_red": 101.0, 
-        "nh_yel": 100.0,
-        "oilt_red": 99.0, 
-        "oilt_min_green": 10.0,
-        "oilp_red": 95.0, 
-        "oilp_min_green": 75.0
+        "g_max": 3.0, "g_min": -1.5,
+        "tq_red": 1795.0, "tq_yel": 1795.0,
+        "itt_red": 790.0, "itt_yel": 740.0,
+        "ng_red": 101.5, "ng_yel": 100.0,
+        "nh_red": 101.0, "nh_yel": 100.0,
+        "oilt_red": 99.0, "oilt_min_green": 10.0,
+        "oilp_red": 95.0, "oilp_min_green": 75.0
     },
     "Multi-Motor (Padrão)": {
         "tipo_aeronave": "Asa Fixa",
         "qtd_motores": 2,
-        "g_max": 2.5, 
-        "g_min": 0.0,
-        "tq_red": 1500.0, 
-        "tq_yel": 1400.0,
-        "itt_red": 850.0, 
-        "itt_yel": 800.0,
-        "ng_red": 100.0, 
-        "ng_yel": 98.0,
-        "nh_red": 100.0, 
-        "nh_yel": 98.0,
-        "oilt_red": 100.0, 
-        "oilt_min_green": 20.0,
-        "oilp_red": 90.0, 
-        "oilp_min_green": 60.0
+        "g_max": 2.5, "g_min": 0.0,
+        "tq_red": 1500.0, "tq_yel": 1400.0,
+        "itt_red": 850.0, "itt_yel": 800.0,
+        "ng_red": 100.0, "ng_yel": 98.0,
+        "nh_red": 100.0, "nh_yel": 98.0,
+        "oilt_red": 100.0, "oilt_min_green": 20.0,
+        "oilp_red": 90.0, "oilp_min_green": 60.0
     }
 }
 
@@ -201,7 +168,8 @@ obs_keys = [
     'obs_manobras', 
     'obs_distancia', 
     'obs_comparativo', 
-    'obs_3d'
+    'obs_3d',
+    'obs_radar'
 ]
 
 for k in obs_keys:
@@ -212,8 +180,15 @@ for k in obs_keys:
 # ==========================================
 # 3. BARRA LATERAL (MENU E ASSINATURA)
 # ==========================================
-st.sidebar.markdown("### 🛠️ Telemetria")
-st.sidebar.caption("👨‍✈️ **Analista Responsável:** Filipe Iack")
+st.sidebar.markdown(f"👤 **Mecânico:** `{st.session_state.nome_logado}`")
+if st.sidebar.button("Sair (Logout)"):
+    st.session_state.usuario_logado = None
+    st.session_state.nome_logado = None
+    st.rerun()
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🛠️ Sistema Telemetria")
+st.sidebar.caption("👨‍✈️ **Gestão de Frota e Telemetria**")
 st.sidebar.markdown("---")
 
 st.sidebar.header("✈️ Projeto da Aeronave")
@@ -464,7 +439,7 @@ def gerar_docx_solo(tempos, alertas, obs_dict):
     titulo.alignment = 1
     
     data_hoje = datetime.now().strftime('%d/%m/%Y')
-    sub = doc.add_paragraph(f"Perfil: {projeto_atual} | Analista: Filipe Iack | Data: {data_hoje}")
+    sub = doc.add_paragraph(f"Perfil: {projeto_atual} | Analista: {st.session_state.nome_logado} | Data: {data_hoje}")
     sub.alignment = 1
     
     doc.add_heading("1. LOGBOOK DA MISSÃO", level=1)
@@ -500,7 +475,7 @@ def gerar_docx_solo(tempos, alertas, obs_dict):
         doc.add_paragraph("Nenhuma observação inserida.")
         
     doc.add_paragraph("\n\n____________________________________________").alignment = 1
-    doc.add_paragraph("Filipe Iack - Especialista em Telemetria AFA").alignment = 1
+    doc.add_paragraph(f"{st.session_state.nome_logado} - Especialista em Telemetria").alignment = 1
     
     io_bytes = io.BytesIO()
     doc.save(io_bytes)
@@ -512,7 +487,7 @@ def gerar_docx_solo_editado(tempos_dict, alertas_texto, obs_dict):
     titulo.alignment = 1
     
     data_hoje = datetime.now().strftime('%d/%m/%Y')
-    sub = doc.add_paragraph(f"Perfil: {projeto_atual} | Analista: Filipe Iack | Data: {data_hoje}")
+    sub = doc.add_paragraph(f"Perfil: {projeto_atual} | Analista: {st.session_state.nome_logado} | Data: {data_hoje}")
     sub.alignment = 1
     
     doc.add_heading("1. LOGBOOK DA MISSÃO", level=1)
@@ -550,7 +525,7 @@ def gerar_docx_solo_editado(tempos_dict, alertas_texto, obs_dict):
         doc.add_paragraph("Nenhuma observação inserida.")
         
     doc.add_paragraph("\n\n____________________________________________").alignment = 1
-    doc.add_paragraph("Filipe Iack - Especialista em Telemetria AFA").alignment = 1
+    doc.add_paragraph(f"{st.session_state.nome_logado} - Especialista em Telemetria").alignment = 1
     
     io_bytes = io.BytesIO()
     doc.save(io_bytes)
@@ -562,7 +537,7 @@ def gerar_docx_formatura(arq_lider, arq_ala, obs_dict):
     titulo.alignment = 1
     
     data_hoje = datetime.now().strftime('%d/%m/%Y')
-    sub = doc.add_paragraph(f"Analista: Filipe Iack | Data: {data_hoje}")
+    sub = doc.add_paragraph(f"Analista: {st.session_state.nome_logado} | Data: {data_hoje}")
     sub.alignment = 1
     
     doc.add_heading("1. AERONAVES ENVOLVIDAS", level=1)
@@ -581,7 +556,7 @@ def gerar_docx_formatura(arq_lider, arq_ala, obs_dict):
         doc.add_paragraph("Nenhuma observação inserida no dossiê.")
         
     doc.add_paragraph("\n\n____________________________________________").alignment = 1
-    doc.add_paragraph("Filipe Iack - Especialista em Telemetria AFA").alignment = 1
+    doc.add_paragraph(f"{st.session_state.nome_logado} - Especialista em Telemetria").alignment = 1
     
     io_bytes = io.BytesIO()
     doc.save(io_bytes)
@@ -654,7 +629,7 @@ if arquivos_up:
                 if df_merge.empty:
                     st.error("❌ Os relógios não coincidem. Tente ajustar o 'Ajuste de Fuso do Ala' acima para -3 ou +3.")
                 else:
-                    aba_dist, aba_comp, aba_3d, aba_rel_form = st.tabs(["📏 1. DISTÂNCIA", "⚙️ 2. COMPARATIVO", "✈️ 3. TRAJETÓRIA 3D", "📄 4. RELATÓRIO FINAL"])
+                    aba_dist, aba_comp, aba_3d, aba_radar, aba_rel_form = st.tabs(["📏 1. DISTÂNCIA", "⚙️ 2. COMPARATIVO", "✈️ 3. TRAJETÓRIA 3D", "🎯 4. RADAR TÁTICO", "📄 5. RELATÓRIO FINAL"])
                     
                     with aba_dist:
                         st.header("Análise de Distância na Formatura")
@@ -778,6 +753,66 @@ if arquivos_up:
                         if st.button("💾 Salvar Comentário", key="b_3d"): 
                             st.success("Salvo com sucesso!")
 
+                    with aba_radar:
+                        st.header("🎯 Radar Tático de Posição Relativa")
+                        st.markdown("O **Líder** está fixo no centro do alvo (cruz laranja). Os pontos mostram o deslocamento em metros do **Ala** ao longo de todo o voo. Quanto mais afastado do centro, maior a dispersão da formatura.")
+                        
+                        # Conversão matemática de Latitude/Longitude para Metros Planos (projeção equiretangular aproximada)
+                        lat_media = np.radians(df_merge['Latitude_lider'].mean())
+                        df_merge['dx_m'] = (df_merge['Longitude_ala'] - df_merge['Longitude_lider']) * 111320 * np.cos(lat_media)
+                        df_merge['dy_m'] = (df_merge['Latitude_ala'] - df_merge['Latitude_lider']) * 111320
+                        
+                        fig_radar = go.Figure()
+                        
+                        # Plotando o Líder estático no centro geométrico (0,0)
+                        fig_radar.add_trace(go.Scatter(
+                            x=[0], y=[0], mode='markers+text', 
+                            marker=dict(color='#e67e22', size=18, symbol='cross'),
+                            text=["LÍDER"], textposition="top center", name="Líder",
+                            hoverinfo="skip"
+                        ))
+                        
+                        # Plotando o rastro de metros dispersos do Ala
+                        fig_radar.add_trace(go.Scatter(
+                            x=df_merge['dx_m'], y=df_merge['dy_m'], mode='markers',
+                            marker=dict(
+                                color=df_merge['AltMSL_ala'] if 'AltMSL_ala' in df_merge.columns else '#3498db', 
+                                colorscale='Viridis', 
+                                size=5, 
+                                showscale=True, 
+                                colorbar=dict(title="Altitude Ala (ft)", len=0.5, x=1.15)
+                            ),
+                            text=df_merge['Datetime'].dt.strftime('%H:%M:%S'),
+                            hovertemplate="Hora: %{text}<br>Deslocamento Lateral: %{x:.1f}m<br>Deslocamento Longitudinal: %{y:.1f}m<extra></extra>",
+                            name="Rastro do Ala"
+                        ))
+                        
+                        # Descobrir o limite do gráfico para mantê-lo num quadrado perfeito
+                        max_abs = max(df_merge['dx_m'].abs().max(), df_merge['dy_m'].abs().max())
+                        limite_radar = max_abs + 20 if pd.notnull(max_abs) else 100
+                        
+                        # Adicionando anéis virtuais de referência para distâncias em metros
+                        for raio in [20, 50, 100, 200, 500]:
+                            if raio < limite_radar:
+                                fig_radar.add_shape(type="circle", x0=-raio, y0=-raio, x1=raio, y1=raio, line=dict(color="rgba(255,255,255,0.1)", width=1, dash="dash"))
+                                fig_radar.add_annotation(x=0, y=raio, text=f"{raio}m", showarrow=False, yshift=10, font=dict(color="rgba(255,255,255,0.4)", size=10))
+                        
+                        fig_radar.update_layout(
+                            template="plotly_dark", height=800, width=800,
+                            xaxis=dict(title="⬅️ Ala à Esquerda (m) | Ala à Direita (m) ➡️", range=[-limite_radar, limite_radar], zeroline=True, zerolinecolor='rgba(255,255,255,0.4)', zerolinewidth=1),
+                            yaxis=dict(title="⬇️ Ala Atrás (m) | Ala à Frente (m) ⬆️", range=[-limite_radar, limite_radar], zeroline=True, zerolinecolor='rgba(255,255,255,0.4)', zerolinewidth=1, scaleanchor="x", scaleratio=1),
+                            showlegend=True,
+                            title="Visão de Topo (God's Eye View)",
+                            margin=dict(l=10, r=10, t=50, b=10)
+                        )
+                        st.plotly_chart(fig_radar, use_container_width=True)
+                        
+                        st.divider()
+                        st.markdown("📝 **Observações - Radar Tático**")
+                        st.session_state.obs_radar = st.text_area("Escreva aqui (Radar):", value=st.session_state.obs_radar, key='k_radar')
+                        if st.button("💾 Salvar Comentário", key="b_radar"): 
+                            st.success("Salvo com sucesso!")
+
                     with aba_rel_form:
                         st.header("📝 Editor do Relatório Final (Formatura)")
                         st.markdown("Confirme ou edite os dados extraídos antes de gerar o Word.")
@@ -791,7 +826,8 @@ if arquivos_up:
                         obs_formatura_atual = {
                             "Posicionamento e Distancia": st.session_state.obs_distancia,
                             "Comparativo Dinamico (Motores)": st.session_state.obs_comparativo,
-                            "Trajetoria Espacial 3D": st.session_state.obs_3d
+                            "Trajetoria Espacial 3D": st.session_state.obs_3d,
+                            "Radar Tatico (Gods Eye View)": st.session_state.obs_radar
                         }
                         
                         st.divider()
@@ -806,7 +842,7 @@ if arquivos_up:
                         )
 
     # ---------------------------------------------------------
-    # FLUXO: VOO SOLO
+    # FLUXO: VOO SOLO E MULTIMOTOR
     # ---------------------------------------------------------
     else:
         df = processar_dados(arquivos_up[0].getvalue())
