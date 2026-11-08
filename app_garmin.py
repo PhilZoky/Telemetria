@@ -57,7 +57,7 @@ if st.session_state.usuario_logado is None:
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
-        st.title("🔒 Plataforma AFA")
+        st.title("🔒 Plataforma Telemetria")
         st.caption("Sistema Comercial de Telemetria e Inspetoria de Voo")
         
         # Cria abas separadas para entrar ou criar conta
