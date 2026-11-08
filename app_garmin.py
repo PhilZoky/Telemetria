@@ -4,7 +4,9 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import simplekml
-from fpdf import FPDF
+from docx import Document
+from docx.shared import RGBColor
+import io
 import os
 import json
 from datetime import datetime
@@ -18,6 +20,8 @@ st.set_page_config(page_title="Telemetria AFA", layout="wide")
 ARQUIVO_PERFIS = "perfis_aeronaves.json"
 PERFIS_PADRAO = {
     "T-27M (Oficial)": {
+        "tipo_aeronave": "Asa Fixa",
+        "qtd_motores": 1,
         "g_max": 3.0, 
         "g_min": -1.5,
         "tq_red": 1795.0, 
@@ -34,6 +38,8 @@ PERFIS_PADRAO = {
         "oilp_min_green": 75.0
     },
     "Multi-Motor (Padrão)": {
+        "tipo_aeronave": "Asa Fixa",
+        "qtd_motores": 2,
         "g_max": 2.5, 
         "g_min": 0.0,
         "tq_red": 1500.0, 
@@ -87,13 +93,18 @@ for k in obs_keys:
 # ==========================================
 # 3. BARRA LATERAL (MENU E ASSINATURA)
 # ==========================================
-st.sidebar.markdown("### 🛠️ Sistema AFA")
+st.sidebar.markdown("### 🛠️ Telemetria")
 st.sidebar.caption("👨‍✈️ **Analista Responsável:** Filipe Iack")
 st.sidebar.markdown("---")
 
 st.sidebar.header("✈️ Projeto da Aeronave")
 projeto_atual = st.sidebar.selectbox("Selecione o Perfil:", list(perfis_salvos.keys()))
 p_dados = perfis_salvos[projeto_atual]
+
+tipo_projeto = p_dados.get("tipo_aeronave", "Asa Fixa")
+qtd_motores_config = int(p_dados.get("qtd_motores", 1))
+
+st.sidebar.info(f"**Classe:** {tipo_projeto} | **Motores Configurados:** {qtd_motores_config}")
 
 st.sidebar.markdown("---")
 st.sidebar.header("🕹️ Modo de Análise")
@@ -105,15 +116,31 @@ st.sidebar.markdown("---")
 
 with st.sidebar.expander("➕ Adicionar Novo Projeto", expanded=False):
     novo_projeto = st.text_input("Nome da nova aeronave:")
+    nova_classe = st.selectbox("Categoria ao criar:", ["Asa Fixa", "Asa Rotativa"])
+    qtd_mot_novo = st.number_input("Quantidade de Motores ao criar:", min_value=1, max_value=6, value=1)
     if st.button("Criar Projeto"):
         if novo_projeto and novo_projeto not in perfis_salvos:
-            perfis_salvos[novo_projeto] = {k: "" for k in PERFIS_PADRAO["T-27M (Oficial)"].keys()}
+            perfis_salvos[novo_projeto] = {
+                "tipo_aeronave": nova_classe,
+                "qtd_motores": int(qtd_mot_novo),
+                "g_max": 3.0, "g_min": -1.5,
+                "tq_red": 1795.0, "tq_yel": 1795.0,
+                "itt_red": 790.0, "itt_yel": 740.0,
+                "ng_red": 101.5, "ng_yel": 100.0,
+                "nh_red": 101.0, "nh_yel": 100.0,
+                "oilt_red": 99.0, "oilt_min_green": 10.0,
+                "oilp_red": 95.0, "oilp_min_green": 75.0
+            }
             salvar_perfis(perfis_salvos)
             st.success(f"Projeto '{novo_projeto}' criado!")
             st.rerun()
 
 with st.sidebar.expander("⚙️ Arcos do Painel (Verde/Amarelo/Vermelho)", expanded=False):
-    st.caption("Configure os limites para os cartões e gráficos. Deixe em branco para desativar o alerta.")
+    st.caption("Configure os limites estruturais e os motores do perfil selecionado.")
+    
+    novo_tipo_aeronave = st.selectbox("Categoria Atual:", ["Asa Fixa", "Asa Rotativa"], index=0 if tipo_projeto == "Asa Fixa" else 1)
+    nova_qtd_mot = st.number_input("Quantidade de Motores Atual:", min_value=1, max_value=6, value=qtd_motores_config)
+    st.markdown("---")
     
     def ler_limite(label, chave):
         val = st.text_input(label, value=str(p_dados.get(chave, "")))
@@ -137,8 +164,10 @@ with st.sidebar.expander("⚙️ Arcos do Painel (Verde/Amarelo/Vermelho)", expa
     l_oilp_red = ler_limite("Pressão Óleo Red Line", "oilp_red")
     l_oilp_min = ler_limite("Pressão Óleo Mínima (Arco Verde)", "oilp_min_green")
 
-    if st.button("💾 Salvar Alterações de Arcos"):
-        perfis_salvos[projeto_atual] = {
+    if st.button("💾 Salvar Alterações de Arcos e Motores"):
+        perfis_salvos[projeto_atual].update({
+            "tipo_aeronave": novo_tipo_aeronave,
+            "qtd_motores": int(nova_qtd_mot),
             "g_max": l_g_max, 
             "g_min": l_g_min, 
             "tq_red": l_tq_red, 
@@ -153,10 +182,11 @@ with st.sidebar.expander("⚙️ Arcos do Painel (Verde/Amarelo/Vermelho)", expa
             "oilt_min_green": l_oilt_min,
             "oilp_red": l_oilp_red, 
             "oilp_min_green": l_oilp_min
-        }
+        })
         perfis_salvos[projeto_atual] = {k: (v if v is not None else "") for k, v in perfis_salvos[projeto_atual].items()}
         salvar_perfis(perfis_salvos)
-        st.success(f"Arcos do {projeto_atual} salvos!")
+        st.success(f"Configurações do {projeto_atual} salvas!")
+        st.rerun()
 
 
 # ==========================================
@@ -167,7 +197,6 @@ st.markdown("Plataforma Avançada de Telemetria Técnica e Tática.")
 
 @st.cache_data
 def processar_dados(file_bytes):
-    import io
     df = pd.read_csv(io.BytesIO(file_bytes), skiprows=2, low_memory=False)
     df.columns = df.columns.str.strip()
     
@@ -183,16 +212,22 @@ def processar_dados(file_bytes):
         
     colunas_numericas = [
         'AltMSL', 'IAS', 'Pitch', 'Roll', 'NormAc', 'LatAc', 
-        'Latitude', 'Longitude', 'E1 Torq ft lbs', 'E1 ITT', 
-        'E1 NP %', 'E1 NG', 'E1 FFlow', 'E1 OilP', 'E1 OilT'
+        'Latitude', 'Longitude'
     ]
+    
+    for i in range(1, 7):
+        colunas_numericas.extend([
+            f'E{i} Torq ft lbs', f'E{i} ITT', f'E{i} NP %', 
+            f'E{i} NG', f'E{i} FFlow', f'E{i} OilP', f'E{i} OilT'
+        ])
                
     for col in colunas_numericas:
         if col in df.columns: 
             df[col] = pd.to_numeric(df[col], errors='coerce')
             
-    if 'E1 OilT' in df.columns: 
-        df['E1 OilT_Celsius'] = (df['E1 OilT'] - 32) / 1.8
+    for i in range(1, 7):
+        if f'E{i} OilT' in df.columns: 
+            df[f'E{i} OilT_Celsius'] = (df[f'E{i} OilT'] - 32) / 1.8
         
     df = df.dropna(subset=['Datetime']).sort_values('Datetime')
     return df
@@ -279,137 +314,162 @@ def render_html_table(df_formatted, height=420):
 def exibir_tabela_grande(df_view):
     traducao = {
         'Lcl Time': 'Hora Local', 'AltMSL': 'Altitude (ft)', 'IAS': 'Velocidade (kt)',
-        'NormAc': 'Força G', 'E1 Torq ft lbs': 'Torque (Lbs)', 'E1 ITT': 'ITT (ºC)',
-        'Pitch': 'Arfagem (º)', 'Roll': 'Rolagem (º)', 'E1 NG': 'Ng (%)', 'E1 NP %': 'Nh (%)',
-        'E1 OilT_Celsius': 'Temp. Óleo (ºC)', 'E1 OilP': 'Pressão Óleo (PSI)'
+        'NormAc': 'Força G', 'Pitch': 'Arfagem (º)', 'Roll': 'Rolagem (º)'
     }
+    
+    for i in range(1, 7):
+        traducao[f'E{i} Torq ft lbs'] = f'Torque M{i} (Lbs)'
+        traducao[f'E{i} ITT'] = f'ITT M{i} (ºC)'
+        traducao[f'E{i} NG'] = f'Ng M{i} (%)'
+        traducao[f'E{i} NP %'] = f'Nh M{i} (%)'
+        traducao[f'E{i} OilT_Celsius'] = f'T.Óleo M{i} (ºC)'
+        traducao[f'E{i} OilP'] = f'P.Óleo M{i} (PSI)'
+
     df_traduzido = df_view.rename(columns=traducao)
     for col in df_traduzido.columns:
-        if col in ['Altitude (ft)', 'Torque (Lbs)', 'ITT (ºC)', 'Temp. Óleo (ºC)', 'Pressão Óleo (PSI)']:
+        if 'Altitude' in col or 'Torque' in col or 'ITT' in col or 'T.Óleo' in col or 'P.Óleo' in col:
             df_traduzido[col] = df_traduzido[col].apply(lambda x: f"{x:.0f}" if pd.notnull(x) else "-")
-        elif col in ['Velocidade (kt)', 'Ng (%)', 'Nh (%)', 'Arfagem (º)', 'Rolagem (º)']:
+        elif 'Velocidade' in col or 'Ng' in col or 'Nh' in col or 'Arfagem' in col or 'Rolagem' in col:
             df_traduzido[col] = df_traduzido[col].apply(lambda x: f"{x:.1f}" if pd.notnull(x) else "-")
-        elif col == 'Força G':
+        elif 'Força G' in col:
             df_traduzido[col] = df_traduzido[col].apply(lambda x: f"{x:.2f}" if pd.notnull(x) else "-")
     render_html_table(df_traduzido)
 
 
 # ==========================================
-# 6. GERADORES DE PDF COM ASSINATURA
+# 6. GERADORES DE DOCX (WORD) - SUBSTITUI O PDF
 # ==========================================
-def formatar_texto_pdf(texto):
-    return texto.encode('latin-1', 'ignore').decode('latin-1').strip()
-
-def gerar_pdf_solo(tempos, alertas, obs_dict):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(200, 10, txt="RELATORIO OFICIAL DE INSPETORIA - VOO SOLO", ln=True, align='C')
+def gerar_docx_solo(tempos, alertas, obs_dict):
+    doc = Document()
+    titulo = doc.add_heading("RELATÓRIO OFICIAL DE INSPETORIA - VOO SOLO", 0)
+    titulo.alignment = 1
     
-    pdf.set_font("Arial", 'I', 10)
     data_hoje = datetime.now().strftime('%d/%m/%Y')
-    pdf.cell(200, 5, txt=f"Perfil: {projeto_atual} | Analista: Filipe Iack | Data: {data_hoje}", ln=True, align='C')
-    pdf.ln(5)
+    sub = doc.add_paragraph(f"Perfil: {projeto_atual} | Analista: Filipe Iack | Data: {data_hoje}")
+    sub.alignment = 1
     
-    pdf.set_font("Arial", 'B', 12)
-    pdf.set_fill_color(200, 200, 200)
-    pdf.cell(200, 8, txt=" 1. LOGBOOK DA MISSAO", ln=True, fill=True)
+    doc.add_heading("1. LOGBOOK DA MISSÃO", level=1)
+    doc.add_paragraph(f"Acionamento: {tempos.get('acionamento','-')}")
+    doc.add_paragraph(f"Decolagem: {tempos.get('decolagem','-')}")
+    doc.add_paragraph(f"Pouso: {tempos.get('pouso','-')}")
+    doc.add_paragraph(f"Corte do Motor: {tempos.get('corte','-')}")
+    doc.add_paragraph(f"TEMPO DE VOO: {tempos.get('t_voo','-')}").runs[0].bold = True
     
-    pdf.set_font("Arial", '', 11)
-    pdf.cell(100, 8, txt=f" Acionamento: {tempos.get('acionamento','-')}", ln=False)
-    pdf.cell(100, 8, txt=f" Decolagem: {tempos.get('decolagem','-')}", ln=True)
-    pdf.cell(100, 8, txt=f" Pouso: {tempos.get('pouso','-')}", ln=False)
-    pdf.cell(100, 8, txt=f" Corte do Motor: {tempos.get('corte','-')}", ln=True)
-    pdf.cell(200, 8, txt=f" TEMPO DE VOO: {tempos.get('t_voo','-')}", ln=True)
-    pdf.ln(5)
-    
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(200, 8, txt=" 2. AUDITORIA DE ALERTAS", ln=True, fill=True)
-    
-    pdf.set_font("Arial", 'B', 10)
+    doc.add_heading("2. AUDITORIA DE ALERTAS", level=1)
     if len(alertas) > 0:
-        for alerta in alertas: 
-            if "LINHA VERMELHA" in alerta or "CRÍTICO" in alerta: 
-                pdf.set_text_color(220, 0, 0)
-            else: 
-                pdf.set_text_color(200, 150, 0)
-            alerta_limpo = alerta.replace("🔴 ", "").replace("🟡 ", "").replace("✅ ", "")
-            pdf.multi_cell(0, 6, txt=formatar_texto_pdf(alerta_limpo))
-            pdf.ln(1)
+        for alerta in alertas:
+            p_al = doc.add_paragraph()
+            run = p_al.add_run(alerta)
+            if "LINHA VERMELHA" in alerta or "CRÍTICO" in alerta or "🔴" in alerta:
+                run.font.color.rgb = RGBColor(220, 0, 0)
+            elif "AMARELO" in alerta or "🟡" in alerta:
+                run.font.color.rgb = RGBColor(200, 150, 0)
     else:
-        pdf.set_text_color(0, 150, 0)
-        pdf.cell(200, 8, txt=" Nenhum alerta registado.", ln=True)
-    
-    pdf.set_text_color(0, 0, 0)
-    pdf.ln(5)
-    
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(200, 8, txt=" 3. OBSERVACOES DA INSPETORIA", ln=True, fill=True)
-    
+        p_al = doc.add_paragraph()
+        run = p_al.add_run("✅ Nenhum alerta registado.")
+        run.font.color.rgb = RGBColor(0, 150, 0)
+        
+    doc.add_heading("3. OBSERVAÇÕES DA INSPETORIA", level=1)
     tem_obs = False
-    for titulo, texto in obs_dict.items():
+    for titulo_obs, texto in obs_dict.items():
         if str(texto).strip() != "":
             tem_obs = True
-            pdf.set_font("Arial", 'B', 11)
-            pdf.cell(200, 8, txt=f"[{titulo}]", ln=True)
-            pdf.set_font("Arial", '', 11)
-            pdf.multi_cell(0, 6, txt=formatar_texto_pdf(str(texto)))
-            pdf.ln(3)
+            doc.add_heading(f"[{titulo_obs}]", level=2)
+            doc.add_paragraph(str(texto))
             
     if not tem_obs:
-        pdf.set_font("Arial", '', 11)
-        pdf.cell(200, 8, txt="Nenhuma observacao inserida.", ln=True)
+        doc.add_paragraph("Nenhuma observação inserida.")
         
-    pdf.ln(10)
-    pdf.set_font("Arial", 'I', 10)
-    pdf.cell(200, 5, txt="____________________________________________", ln=True, align='C')
-    pdf.cell(200, 5, txt="Filipe Iack - Especialista em Telemetria AFA", ln=True, align='C')
-        
-    return pdf.output(dest='S').encode('latin-1')
+    doc.add_paragraph("\n\n____________________________________________").alignment = 1
+    doc.add_paragraph("Filipe Iack - Especialista em Telemetria AFA").alignment = 1
+    
+    io_bytes = io.BytesIO()
+    doc.save(io_bytes)
+    return io_bytes.getvalue()
 
-def gerar_pdf_formatura(arq_lider, arq_ala, obs_dict):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(200, 10, txt="RELATORIO TATICO DE FORMATURA", ln=True, align='C')
+def gerar_docx_solo_editado(tempos_dict, alertas_texto, obs_dict):
+    doc = Document()
+    titulo = doc.add_heading("RELATÓRIO OFICIAL DE INSPETORIA - VOO SOLO", 0)
+    titulo.alignment = 1
     
-    pdf.set_font("Arial", 'I', 10)
     data_hoje = datetime.now().strftime('%d/%m/%Y')
-    pdf.cell(200, 5, txt=f"Analista: Filipe Iack | Data: {data_hoje}", ln=True, align='C')
-    pdf.ln(5)
+    sub = doc.add_paragraph(f"Perfil: {projeto_atual} | Analista: Filipe Iack | Data: {data_hoje}")
+    sub.alignment = 1
     
-    pdf.set_font("Arial", 'B', 12)
-    pdf.set_fill_color(200, 200, 200)
-    pdf.cell(200, 8, txt=" 1. AERONAVES ENVOLVIDAS", ln=True, fill=True)
+    doc.add_heading("1. LOGBOOK DA MISSÃO", level=1)
+    doc.add_paragraph(f"Acionamento: {tempos_dict.get('acionamento','-')}")
+    doc.add_paragraph(f"Decolagem: {tempos_dict.get('decolagem','-')}")
+    doc.add_paragraph(f"Pouso: {tempos_dict.get('pouso','-')}")
+    doc.add_paragraph(f"Corte do Motor: {tempos_dict.get('corte','-')}")
+    doc.add_paragraph(f"TEMPO DE VOO: {tempos_dict.get('t_voo','-')}").runs[0].bold = True
     
-    pdf.set_font("Arial", '', 11)
-    pdf.cell(200, 8, txt=f" Ficheiro Lider: {formatar_texto_pdf(arq_lider)}", ln=True)
-    pdf.cell(200, 8, txt=f" Ficheiro Ala:   {formatar_texto_pdf(arq_ala)}", ln=True)
-    pdf.ln(5)
+    doc.add_heading("2. AUDITORIA DE ALERTAS", level=1)
+    linhas_alerta = [linha for linha in alertas_texto.split('\n') if linha.strip()]
     
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(200, 8, txt=" 2. DEBRIEFING E AVALIACAO TÁTICA", ln=True, fill=True)
-    
+    if len(linhas_alerta) > 0:
+        for alerta in linhas_alerta:
+            p_al = doc.add_paragraph()
+            run = p_al.add_run(alerta)
+            if "LINHA VERMELHA" in alerta or "CRÍTICO" in alerta or "🔴" in alerta:
+                run.font.color.rgb = RGBColor(220, 0, 0)
+            elif "AMARELO" in alerta or "🟡" in alerta:
+                run.font.color.rgb = RGBColor(200, 150, 0)
+    else:
+        p_al = doc.add_paragraph()
+        run = p_al.add_run("✅ Nenhum alerta registado.")
+        run.font.color.rgb = RGBColor(0, 150, 0)
+        
+    doc.add_heading("3. OBSERVAÇÕES DA INSPETORIA", level=1)
     tem_obs = False
-    for titulo, texto in obs_dict.items():
+    for titulo_obs, texto in obs_dict.items():
         if str(texto).strip() != "":
             tem_obs = True
-            pdf.set_font("Arial", 'B', 11)
-            pdf.cell(200, 8, txt=f"[{titulo}]", ln=True)
-            pdf.set_font("Arial", '', 11)
-            pdf.multi_cell(0, 6, txt=formatar_texto_pdf(str(texto)))
-            pdf.ln(3)
+            doc.add_heading(f"[{titulo_obs}]", level=2)
+            doc.add_paragraph(str(texto))
             
     if not tem_obs:
-        pdf.set_font("Arial", '', 11)
-        pdf.cell(200, 8, txt="Nenhuma observacao inserida no dossie.", ln=True)
+        doc.add_paragraph("Nenhuma observação inserida.")
         
-    pdf.ln(10)
-    pdf.set_font("Arial", 'I', 10)
-    pdf.cell(200, 5, txt="____________________________________________", ln=True, align='C')
-    pdf.cell(200, 5, txt="Filipe Iack - Especialista em Telemetria AFA", ln=True, align='C')
+    doc.add_paragraph("\n\n____________________________________________").alignment = 1
+    doc.add_paragraph("Filipe Iack - Especialista em Telemetria AFA").alignment = 1
+    
+    io_bytes = io.BytesIO()
+    doc.save(io_bytes)
+    return io_bytes.getvalue()
+
+def gerar_docx_formatura(arq_lider, arq_ala, obs_dict):
+    doc = Document()
+    titulo = doc.add_heading("RELATÓRIO TÁTICO DE FORMATURA", 0)
+    titulo.alignment = 1
+    
+    data_hoje = datetime.now().strftime('%d/%m/%Y')
+    sub = doc.add_paragraph(f"Analista: Filipe Iack | Data: {data_hoje}")
+    sub.alignment = 1
+    
+    doc.add_heading("1. AERONAVES ENVOLVIDAS", level=1)
+    doc.add_paragraph(f"Ficheiro Líder: {arq_lider}")
+    doc.add_paragraph(f"Ficheiro Ala: {arq_ala}")
+    
+    doc.add_heading("2. DEBRIEFING E AVALIAÇÃO TÁTICA", level=1)
+    tem_obs = False
+    for titulo_obs, texto in obs_dict.items():
+        if str(texto).strip() != "":
+            tem_obs = True
+            doc.add_heading(f"[{titulo_obs}]", level=2)
+            doc.add_paragraph(str(texto))
+            
+    if not tem_obs:
+        doc.add_paragraph("Nenhuma observação inserida no dossiê.")
         
-    return pdf.output(dest='S').encode('latin-1')
+    doc.add_paragraph("\n\n____________________________________________").alignment = 1
+    doc.add_paragraph("Filipe Iack - Especialista em Telemetria AFA").alignment = 1
+    
+    io_bytes = io.BytesIO()
+    doc.save(io_bytes)
+    return io_bytes.getvalue()
+
+def gerar_docx_formatura_editado(arq_lider, arq_ala, obs_dict):
+    return gerar_docx_formatura(arq_lider, arq_ala, obs_dict)
 
 
 # ==========================================
@@ -448,21 +508,7 @@ if arquivos_up:
                 ajuste_horas = st.number_input("⏳ Ajuste de Fuso do Ala (Horas):", min_value=-12, max_value=12, value=0, step=1, help="Use -3 ou +3")
                 
             st.sidebar.markdown("---")
-            st.sidebar.success("📄 **Dossiê Pronto para Exportação**")
-            
-            obs_formatura = {
-                "Posicionamento e Distancia": st.session_state.obs_distancia,
-                "Comparativo Dinamico (Motores)": st.session_state.obs_comparativo,
-                "Trajetoria Espacial 3D": st.session_state.obs_3d
-            }
-            pdf_bytes_form = gerar_pdf_formatura(arq_lider, arq_ala, obs_formatura)
-            st.sidebar.download_button(
-                label="💾 BAIXAR DOSSIÊ DE FORMATURA (PDF)", 
-                data=pdf_bytes_form, 
-                file_name="Dossie_Formatura.pdf", 
-                mime="application/pdf", 
-                use_container_width=True
-            )
+            st.sidebar.success("✅ **Análise Carregada**")
 
             if arq_lider == arq_ala:
                 st.error("⚠️ Você selecionou o mesmo ficheiro para o Líder e para o Ala. Mude um deles nas caixas acima.")
@@ -489,7 +535,7 @@ if arquivos_up:
                 if df_merge.empty:
                     st.error("❌ Os relógios não coincidem. Tente ajustar o 'Ajuste de Fuso do Ala' acima para -3 ou +3.")
                 else:
-                    aba_dist, aba_comp, aba_3d = st.tabs(["📏 1. DISTÂNCIA", "⚙️ 2. COMPARATIVO", "✈️ 3. TRAJETÓRIA 3D"])
+                    aba_dist, aba_comp, aba_3d, aba_rel_form = st.tabs(["📏 1. DISTÂNCIA", "⚙️ 2. COMPARATIVO", "✈️ 3. TRAJETÓRIA 3D", "📄 4. RELATÓRIO FINAL"])
                     
                     with aba_dist:
                         st.header("Análise de Distância na Formatura")
@@ -539,7 +585,7 @@ if arquivos_up:
                         render_html_table(df_formatada)
 
                         st.divider()
-                        st.markdown("📝 **Observações - Distância** (Esses comentários irão para o PDF)")
+                        st.markdown("📝 **Observações - Distância** (Esses comentários irão para o Word)")
                         st.session_state.obs_distancia = st.text_area("Escreva aqui:", value=st.session_state.obs_distancia, key='k_dist')
                         if st.button("💾 Salvar Comentário", key="b_dist"): 
                             st.success("Salvo com sucesso!")
@@ -613,6 +659,33 @@ if arquivos_up:
                         if st.button("💾 Salvar Comentário", key="b_3d"): 
                             st.success("Salvo com sucesso!")
 
+                    with aba_rel_form:
+                        st.header("📝 Editor do Relatório Final (Formatura)")
+                        st.markdown("Confirme ou edite os dados extraídos antes de gerar o Word.")
+                        
+                        c1, c2 = st.columns(2)
+                        with c1: lider_editado = st.text_input("Ficheiro Líder:", arq_lider)
+                        with c2: ala_editado = st.text_input("Ficheiro Ala:", arq_ala)
+                        
+                        st.info("As observações editadas nas outras abas serão incluídas automaticamente.")
+                        
+                        obs_formatura_atual = {
+                            "Posicionamento e Distancia": st.session_state.obs_distancia,
+                            "Comparativo Dinamico (Motores)": st.session_state.obs_comparativo,
+                            "Trajetoria Espacial 3D": st.session_state.obs_3d
+                        }
+                        
+                        st.divider()
+                        st.subheader("🖨️ Gerar Documento Word")
+                        docx_bytes_form_edit = gerar_docx_formatura_editado(lider_editado, ala_editado, obs_formatura_atual)
+                        st.download_button(
+                            label="💾 BAIXAR DOSSIÊ DE FORMATURA (.DOCX)", 
+                            data=docx_bytes_form_edit, 
+                            file_name="Dossie_Formatura.docx", 
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
+                            use_container_width=True
+                        )
+
     # ---------------------------------------------------------
     # FLUXO: VOO SOLO
     # ---------------------------------------------------------
@@ -621,12 +694,6 @@ if arquivos_up:
         
         max_g = df['NormAc'].max() if 'NormAc' in df.columns else 0
         min_g = df['NormAc'].min() if 'NormAc' in df.columns else 0
-        max_torq = df['E1 Torq ft lbs'].max() if 'E1 Torq ft lbs' in df.columns else 0
-        max_itt = df['E1 ITT'].max() if 'E1 ITT' in df.columns else 0
-        max_ng = df['E1 NG'].max() if 'E1 NG' in df.columns else 0
-        max_nh = df['E1 NP %'].max() if 'E1 NP %' in df.columns else 0
-        max_oilt = df['E1 OilT_Celsius'].max() if 'E1 OilT_Celsius' in df.columns else 0
-        max_oilp = df['E1 OilP'].max() if 'E1 OilP' in df.columns else 0
 
         alertas = []
         
@@ -647,7 +714,13 @@ if arquivos_up:
         if l_g_min is not None and min_g <= l_g_min: 
             add_alerta_contexto('NormAc', min_g, f"🔴 LINHA VERMELHA: Força G Negativa ({min_g:.2f}G)")
         
+        # Regras de Negócios Restritas para T-27M
         if projeto_atual == "T-27M (Oficial)":
+            max_torq = df['E1 Torq ft lbs'].max() if 'E1 Torq ft lbs' in df.columns else 0
+            max_itt = df['E1 ITT'].max() if 'E1 ITT' in df.columns else 0
+            max_ng = df['E1 NG'].max() if 'E1 NG' in df.columns else 0
+            max_nh = df['E1 NP %'].max() if 'E1 NP %' in df.columns else 0
+
             if verificar_temporizador(df, 'E1 Torq ft lbs', 2100, 2): 
                 add_alerta_contexto('E1 Torq ft lbs', max_torq, f"🔴 OVER-TORQUE CRÍTICO: >2100 Lbs por 2 seg")
             elif verificar_temporizador(df, 'E1 Torq ft lbs', 1970, 1): 
@@ -681,67 +754,67 @@ if arquivos_up:
                 add_alerta_contexto('E1 NP %', max_nh, f"🔴 LINHA VERMELHA Nh: {max_nh:.1f}%")
             elif l_nh_yel is not None and max_nh >= l_nh_yel: 
                 add_alerta_contexto('E1 NP %', max_nh, f"🟡 ARCO AMARELO Nh: {max_nh:.1f}%")
+        
+        # Regras Gerais para Multimotores / Outras Aeronaves
         else:
-            if l_tq_red is not None and max_torq >= l_tq_red: 
-                add_alerta_contexto('E1 Torq ft lbs', max_torq, f"🔴 LINHA VERMELHA Torque: {max_torq:.0f} Lbs")
-            elif l_tq_yel is not None and max_torq >= l_tq_yel: 
-                add_alerta_contexto('E1 Torq ft lbs', max_torq, f"🟡 ARCO AMARELO Torque: {max_torq:.0f} Lbs")
+            for i_mot in range(1, qtd_motores_config + 1):
+                m_torq = df[f'E{i_mot} Torq ft lbs'].max() if f'E{i_mot} Torq ft lbs' in df.columns else 0
+                m_itt = df[f'E{i_mot} ITT'].max() if f'E{i_mot} ITT' in df.columns else 0
+                m_ng = df[f'E{i_mot} NG'].max() if f'E{i_mot} NG' in df.columns else 0
+                m_nh = df[f'E{i_mot} NP %'].max() if f'E{i_mot} NP %' in df.columns else 0
                 
-            if l_ng_red is not None and max_ng >= l_ng_red: 
-                add_alerta_contexto('E1 NG', max_ng, f"🔴 LINHA VERMELHA Ng: {max_ng:.1f}%")
-            elif l_ng_yel is not None and max_ng >= l_ng_yel: 
-                add_alerta_contexto('E1 NG', max_ng, f"🟡 ARCO AMARELO Ng: {max_ng:.1f}%")
+                if l_tq_red is not None and m_torq >= l_tq_red: add_alerta_contexto(f'E{i_mot} Torq ft lbs', m_torq, f"🔴 Motor {i_mot} LINHA VERMELHA Torque: {m_torq:.0f} Lbs")
+                elif l_tq_yel is not None and m_torq >= l_tq_yel: add_alerta_contexto(f'E{i_mot} Torq ft lbs', m_torq, f"🟡 Motor {i_mot} ARCO AMARELO Torque: {m_torq:.0f} Lbs")
                 
-            if l_itt_red is not None and max_itt >= l_itt_red: 
-                add_alerta_contexto('E1 ITT', max_itt, f"🔴 LINHA VERMELHA ITT: {max_itt:.0f} ºC")
-            elif l_itt_yel is not None and max_itt >= l_itt_yel: 
-                add_alerta_contexto('E1 ITT', max_itt, f"🟡 ARCO AMARELO ITT: {max_itt:.0f} ºC")
+                if l_ng_red is not None and m_ng >= l_ng_red: add_alerta_contexto(f'E{i_mot} NG', m_ng, f"🔴 Motor {i_mot} LINHA VERMELHA Ng: {m_ng:.1f}%")
+                elif l_ng_yel is not None and m_ng >= l_ng_yel: add_alerta_contexto(f'E{i_mot} NG', m_ng, f"🟡 Motor {i_mot} ARCO AMARELO Ng: {m_ng:.1f}%")
                 
-            if l_nh_red is not None and max_nh >= l_nh_red: 
-                add_alerta_contexto('E1 NP %', max_nh, f"🔴 LINHA VERMELHA Nh: {max_nh:.1f}%")
-            elif l_nh_yel is not None and max_nh >= l_nh_yel: 
-                add_alerta_contexto('E1 NP %', max_nh, f"🟡 ARCO AMARELO Nh: {max_nh:.1f}%")
+                if l_itt_red is not None and m_itt >= l_itt_red: add_alerta_contexto(f'E{i_mot} ITT', m_itt, f"🔴 Motor {i_mot} LINHA VERMELHA ITT: {m_itt:.0f} ºC")
+                elif l_itt_yel is not None and m_itt >= l_itt_yel: add_alerta_contexto(f'E{i_mot} ITT', m_itt, f"🟡 Motor {i_mot} ARCO AMARELO ITT: {m_itt:.0f} ºC")
+                
+                if l_nh_red is not None and m_nh >= l_nh_red: add_alerta_contexto(f'E{i_mot} NP %', m_nh, f"🔴 Motor {i_mot} LINHA VERMELHA Nh: {m_nh:.1f}%")
+                elif l_nh_yel is not None and m_nh >= l_nh_yel: add_alerta_contexto(f'E{i_mot} NP %', m_nh, f"🟡 Motor {i_mot} ARCO AMARELO Nh: {m_nh:.1f}%")
 
-        if l_oilt_red is not None and max_oilt >= l_oilt_red: 
-            add_alerta_contexto('E1 OilT_Celsius', max_oilt, f"🔴 LINHA VERMELHA Temp. Óleo: {max_oilt:.0f} ºC")
-        if l_oilp_red is not None and max_oilp >= l_oilp_red: 
-            add_alerta_contexto('E1 OilP', max_oilp, f"🔴 LINHA VERMELHA Pressão Óleo: {max_oilp:.0f} PSI")
+        # Regras de Temperatura/Pressão do Óleo (Aplicadas a todos os motores do perfil)
+        for i_mot in range(1, qtd_motores_config + 1):
+            m_oilt = df[f'E{i_mot} OilT_Celsius'].max() if f'E{i_mot} OilT_Celsius' in df.columns else 0
+            m_oilp = df[f'E{i_mot} OilP'].max() if f'E{i_mot} OilP' in df.columns else 0
+            
+            if l_oilt_red is not None and m_oilt >= l_oilt_red: add_alerta_contexto(f'E{i_mot} OilT_Celsius', m_oilt, f"🔴 Motor {i_mot} LINHA VERMELHA Temp Óleo: {m_oilt:.0f} ºC")
+            if l_oilp_red is not None and m_oilp >= l_oilp_red: add_alerta_contexto(f'E{i_mot} OilP', m_oilp, f"🔴 Motor {i_mot} LINHA VERMELHA Pressão Óleo: {m_oilp:.0f} PSI")
 
         tempos = {'acionamento': '-', 'decolagem': '-', 'pouso': '-', 'corte': '-', 't_voo': '-'}
-        if 'E1 NG' in df.columns:
-            motor_on = df[(df['E1 NG'] > 10) & (df['Datetime'].notna())]
+        
+        # Ajuste dinâmico para Helicópteros ou Aviões no Gatilho de Motor
+        if tipo_projeto == "Asa Rotativa":
+            motor_on = df[(df.get('E1 NG', pd.Series([0])) > 15) & (df['Datetime'].notna())]
             if not motor_on.empty:
                 tempos['acionamento'] = motor_on.iloc[0]['Datetime'].strftime('%H:%M:%S')
                 tempos['corte'] = motor_on.iloc[-1]['Datetime'].strftime('%H:%M:%S')
-        
-        if 'IAS' in df.columns:
-            voo_ativo = df[(df['IAS'] > 50) & (df['Datetime'].notna())]
-            if not voo_ativo.empty:
-                tempos['decolagem'] = voo_ativo.iloc[0]['Datetime'].strftime('%H:%M:%S')
-                tempos['pouso'] = voo_ativo.iloc[-1]['Datetime'].strftime('%H:%M:%S')
-                tempos['t_voo'] = str(voo_ativo.iloc[-1]['Datetime'] - voo_ativo.iloc[0]['Datetime']).split('.')[0]
+                tempos['decolagem'] = tempos['acionamento']
+                tempos['pouso'] = tempos['corte']
+                tempos['t_voo'] = str(motor_on.iloc[-1]['Datetime'] - motor_on.iloc[0]['Datetime']).split('.')[0]
+            voo_ativo = motor_on
         else:
-            voo_ativo = pd.DataFrame()
+            if 'E1 NG' in df.columns:
+                motor_on = df[(df['E1 NG'] > 10) & (df['Datetime'].notna())]
+                if not motor_on.empty:
+                    tempos['acionamento'] = motor_on.iloc[0]['Datetime'].strftime('%H:%M:%S')
+                    tempos['corte'] = motor_on.iloc[-1]['Datetime'].strftime('%H:%M:%S')
+            
+            if 'IAS' in df.columns:
+                voo_ativo = df[(df['IAS'] > 50) & (df['Datetime'].notna())]
+                if not voo_ativo.empty:
+                    tempos['decolagem'] = voo_ativo.iloc[0]['Datetime'].strftime('%H:%M:%S')
+                    tempos['pouso'] = voo_ativo.iloc[-1]['Datetime'].strftime('%H:%M:%S')
+                    tempos['t_voo'] = str(voo_ativo.iloc[-1]['Datetime'] - voo_ativo.iloc[0]['Datetime']).split('.')[0]
+            else:
+                voo_ativo = pd.DataFrame()
 
         st.sidebar.markdown("---")
-        st.sidebar.success("📄 **Dossiê Pronto para Exportação**")
-        
-        obs_solo = {
-            "Resumo de Painel e Rota": st.session_state.obs_resumo,
-            "Inspetoria e Graficos": st.session_state.obs_graficos,
-            "Avaliador de Manobras e Pouso": st.session_state.obs_manobras
-        }
-        
-        pdf_bytes_solo = gerar_pdf_solo(tempos, alertas, obs_solo)
-        st.sidebar.download_button(
-            label="💾 BAIXAR RELATÓRIO OFICIAL (PDF)", 
-            data=pdf_bytes_solo, 
-            file_name="Inspetoria_Relatorio.pdf", 
-            mime="application/pdf", 
-            use_container_width=True
-        )
+        st.sidebar.success("✅ **Análise Carregada**")
 
-        aba_didatica, aba_inspetoria, aba_manobras = st.tabs(["🎓 1. RESUMO DE PAINEL", "⚙️ 2. INSPETORIA E GRÁFICOS", "🛩️ 3. AVALIADOR DE MANOBRAS"])
+        aba_didatica, aba_inspetoria, aba_manobras, aba_relatorio = st.tabs(["🎓 1. RESUMO DE PAINEL", "⚙️ 2. INSPETORIA E GRÁFICOS", "🛩️ 3. AVALIADOR DE MANOBRAS", "📄 4. RELATÓRIO FINAL"])
 
         with aba_didatica:
             st.header(f"🎯 Resumo de Picos - {projeto_atual}")
@@ -749,16 +822,25 @@ if arquivos_up:
             
             with c1:
                 exibir_card_arcos("Força G Máxima", max_g, l_g_max, None, None, "G", ":.2f")
+                max_ng = df['E1 NG'].max() if 'E1 NG' in df.columns else 0
                 exibir_card_arcos("Gerador de Gás (Ng)", max_ng, l_ng_red, l_ng_yel, None, "%", ":.1f")
             with c2:
                 exibir_card_arcos("Força G Mínima", min_g, l_g_min, None, None, "G", ":.2f", e_minimo=True)
+                max_nh = df['E1 NP %'].max() if 'E1 NP %' in df.columns else 0
                 exibir_card_arcos("Hélice (Nh)", max_nh, l_nh_red, l_nh_yel, None, "%", ":.1f")
             with c3:
+                max_torq = df['E1 Torq ft lbs'].max() if 'E1 Torq ft lbs' in df.columns else 0
                 exibir_card_arcos("Torque Máximo", max_torq, l_tq_red, l_tq_yel, None, "Lbs", ":.0f")
+                max_oilt = df['E1 OilT_Celsius'].max() if 'E1 OilT_Celsius' in df.columns else 0
                 exibir_card_arcos("Temp. Óleo (OilT)", max_oilt, l_oilt_red, None, l_oilt_min, "ºC", ":.0f")
             with c4:
+                max_itt = df['E1 ITT'].max() if 'E1 ITT' in df.columns else 0
                 exibir_card_arcos("Temperatura ITT", max_itt, l_itt_red, l_itt_yel, None, "ºC", ":.0f")
+                max_oilp = df['E1 OilP'].max() if 'E1 OilP' in df.columns else 0
                 exibir_card_arcos("Pressão Óleo (OilP)", max_oilp, l_oilp_red, None, l_oilp_min, "PSI", ":.0f")
+                
+            if qtd_motores_config > 1:
+                st.caption(f"*Valores do Motor 1 no painel. O rastreio dos {qtd_motores_config} motores está detalhado na aba de Inspetoria.*")
 
             st.divider()
             st.subheader("🗺️ Área de Instrução (Rota e Google Earth)")
@@ -784,13 +866,13 @@ if arquivos_up:
                 )
                 st.plotly_chart(fig_map, use_container_width=True)
                 
-                # Geração do arquivo KML tridimensional compatível com o Google Earth
+                # Geração do arquivo KML tridimensional compatível com o Google Earth (Absolute)
                 kml = simplekml.Kml()
                 linestring = kml.newlinestring(
                     name="Trajetoria de Voo 3D", 
                     coords=[(r['Longitude'], r['Latitude'], r['AltMSL'] * 0.3048) for i, r in df_mapa.iterrows()]
                 )
-                linestring.altitudemode = simplekml.AltitudeMode.relativetoground
+                linestring.altitudemode = simplekml.AltitudeMode.absolute
                 linestring.style.linestyle.color = simplekml.Color.cyan
                 linestring.style.linestyle.width = 4
 
@@ -798,12 +880,14 @@ if arquivos_up:
                     name="Início da Missão",
                     coords=[(df_mapa['Longitude'].iloc[0], df_mapa['Latitude'].iloc[0], df_mapa['AltMSL'].iloc[0] * 0.3048)]
                 )
+                ponto_inicio.altitudemode = simplekml.AltitudeMode.absolute
                 ponto_inicio.style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/grn-circle.png"
 
                 ponto_fim = kml.newpoint(
                     name="Término / Pouso",
                     coords=[(df_mapa['Longitude'].iloc[-1], df_mapa['Latitude'].iloc[-1], df_mapa['AltMSL'].iloc[-1] * 0.3048)]
                 )
+                ponto_fim.altitudemode = simplekml.AltitudeMode.absolute
                 ponto_fim.style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/red-circle.png"
                 
                 st.download_button("⬇️ Baixar Rota 3D (Google Earth .KML)", data=kml.kml(), file_name="rota_voo.kml", mime="application/vnd.google-earth.kml+xml")
@@ -829,11 +913,18 @@ if arquivos_up:
             st.subheader("🔍 Investigação de Eventos")
             c_busca1, c_busca2, c_busca3 = st.columns([2, 1, 1])
             opcoes_busca = {
-                'Força G': 'NormAc', 'Torque': 'E1 Torq ft lbs', 'ITT': 'E1 ITT', 
-                'Ng (%)': 'E1 NG', 'Nh (%)': 'E1 NP %', 'Temp. Óleo': 'E1 OilT_Celsius', 
-                'Pressão Óleo': 'E1 OilP', 'Velocidade': 'IAS', 'Altitude': 'AltMSL', 
+                'Força G': 'NormAc', 'Torque M1': 'E1 Torq ft lbs', 'ITT M1': 'E1 ITT', 
+                'Ng M1 (%)': 'E1 NG', 'Nh M1 (%)': 'E1 NP %', 'Temp. Óleo M1': 'E1 OilT_Celsius', 
+                'Pressão Óleo M1': 'E1 OilP', 'Velocidade': 'IAS', 'Altitude': 'AltMSL', 
                 'Arfagem (Pitch)': 'Pitch', 'Rolagem (Roll)': 'Roll'
             }
+            if qtd_motores_config > 1:
+                opcoes_busca.update({
+                    'Torque M2': 'E2 Torq ft lbs', 'ITT M2': 'E2 ITT',
+                    'Ng M2 (%)': 'E2 NG', 'Nh M2 (%)': 'E2 NP %',
+                    'Temp. Óleo M2': 'E2 OilT_Celsius', 'Pressão Óleo M2': 'E2 OilP'
+                })
+            
             with c_busca1: 
                 escolha = st.selectbox("Parâmetro:", list(opcoes_busca.keys()))
             with c_busca2: 
@@ -845,7 +936,9 @@ if arquivos_up:
             if coluna_filtro in df.columns:
                 resultado_busca = df[df[coluna_filtro] > valor] if operador == "Maior que >" else df[df[coluna_filtro] < valor]
                 if not resultado_busca.empty:
-                    colunas_ver = ['Lcl Time', 'AltMSL', 'IAS', 'NormAc', 'Pitch', 'Roll', 'E1 Torq ft lbs', 'E1 ITT', 'E1 NG', 'E1 NP %', 'E1 OilT_Celsius', 'E1 OilP']
+                    colunas_ver = ['Lcl Time', 'AltMSL', 'IAS', 'NormAc', 'Pitch', 'Roll']
+                    for j in range(1, qtd_motores_config + 1):
+                        colunas_ver.extend([f'E{j} Torq ft lbs', f'E{j} ITT', f'E{j} NG', f'E{j} NP %', f'E{j} OilT_Celsius', f'E{j} OilP'])
                     colunas_ver = [c for c in colunas_ver if c in df.columns]
                     exibir_tabela_grande(resultado_busca[colunas_ver].head(20).copy())
                 else: 
@@ -860,6 +953,11 @@ if arquivos_up:
                 subplot_titles=("1. Altitude e Velocidade", "2. Força G", "3. Torque (Lbs)", "4. Temperatura ITT (ºC)", "5. Gerador de Gás - Ng (%)", "6. Rotação da Hélice - Nh (%)")
             )
             
+            cores_motores = ['#27ae60', '#f1c40f', '#e67e22', '#8e44ad']
+            cores_itt = ['#f39c12', '#e74c3c', '#d35400', '#c0392b']
+            cores_ng = ['#9b59b6', '#3498db', '#1abc9c', '#e67e22']
+            cores_nh = ['#f1c40f', '#2ecc71', '#34495e', '#bdc3c7']
+            
             if 'AltMSL' in df.columns: 
                 fig.add_trace(go.Scattergl(x=df['Datetime'], y=df['AltMSL'], name="Altitude (ft)", fill='tozeroy', fillcolor='rgba(52, 152, 219, 0.1)', line=dict(color='#3498db', width=2)), row=1, col=1, secondary_y=False)
             if 'IAS' in df.columns: 
@@ -870,33 +968,33 @@ if arquivos_up:
                 if l_g_max is not None: 
                     fig.add_hline(y=l_g_max, line_dash="dash", line_color="red", row=2, col=1)
                     
-            if 'E1 Torq ft lbs' in df.columns: 
-                fig.add_trace(go.Scattergl(x=df['Datetime'], y=df['E1 Torq ft lbs'], name="Torque (Lbs)", fill='tozeroy', fillcolor='rgba(39, 174, 96, 0.1)', line=dict(color='#27ae60', width=2)), row=3, col=1)
-                if l_tq_red is not None: 
-                    fig.add_hline(y=l_tq_red, line_dash="dash", line_color="red", row=3, col=1)
-                if l_tq_yel is not None and l_tq_red is not None and l_tq_yel != l_tq_red: 
-                    fig.add_hrect(y0=l_tq_yel, y1=l_tq_red, fillcolor="rgba(241, 196, 15, 0.2)", layer="below", line_width=0, row=3, col=1)
+            for i_m in range(1, qtd_motores_config + 1):
+                col_tq = f'E{i_m} Torq ft lbs'
+                if col_tq in df.columns: 
+                    fig.add_trace(go.Scattergl(x=df['Datetime'], y=df[col_tq], name=f"Tq M{i_m}", line=dict(color=cores_motores[i_m-1], width=2)), row=3, col=1)
+            if l_tq_red is not None: fig.add_hline(y=l_tq_red, line_dash="dash", line_color="red", row=3, col=1)
+            if l_tq_yel is not None and l_tq_red is not None and l_tq_yel != l_tq_red: fig.add_hrect(y0=l_tq_yel, y1=l_tq_red, fillcolor="rgba(241, 196, 15, 0.2)", layer="below", line_width=0, row=3, col=1)
                     
-            if 'E1 ITT' in df.columns: 
-                fig.add_trace(go.Scattergl(x=df['Datetime'], y=df['E1 ITT'], name="ITT (ºC)", fill='tozeroy', fillcolor='rgba(243, 156, 18, 0.1)', line=dict(color='#f39c12', width=2)), row=4, col=1)
-                if l_itt_red is not None: 
-                    fig.add_hline(y=l_itt_red, line_dash="dash", line_color="red", row=4, col=1)
-                if l_itt_yel is not None and l_itt_red is not None: 
-                    fig.add_hrect(y0=l_itt_yel, y1=l_itt_red, fillcolor="rgba(241, 196, 15, 0.2)", layer="below", line_width=0, row=4, col=1)
+            for i_m in range(1, qtd_motores_config + 1):
+                col_itt = f'E{i_m} ITT'
+                if col_itt in df.columns: 
+                    fig.add_trace(go.Scattergl(x=df['Datetime'], y=df[col_itt], name=f"ITT M{i_m}", line=dict(color=cores_itt[i_m-1], width=2)), row=4, col=1)
+            if l_itt_red is not None: fig.add_hline(y=l_itt_red, line_dash="dash", line_color="red", row=4, col=1)
+            if l_itt_yel is not None and l_itt_red is not None: fig.add_hrect(y0=l_itt_yel, y1=l_itt_red, fillcolor="rgba(241, 196, 15, 0.2)", layer="below", line_width=0, row=4, col=1)
                     
-            if 'E1 NG' in df.columns:
-                fig.add_trace(go.Scattergl(x=df['Datetime'], y=df['E1 NG'], name="Ng (%)", fill='tozeroy', fillcolor='rgba(155, 89, 182, 0.1)', line=dict(color='#9b59b6', width=2)), row=5, col=1)
-                if l_ng_red is not None: 
-                    fig.add_hline(y=l_ng_red, line_dash="dash", line_color="red", row=5, col=1)
-                if l_ng_yel is not None and l_ng_red is not None: 
-                    fig.add_hrect(y0=l_ng_yel, y1=l_ng_red, fillcolor="rgba(241, 196, 15, 0.2)", layer="below", line_width=0, row=5, col=1)
+            for i_m in range(1, qtd_motores_config + 1):
+                col_ng = f'E{i_m} NG'
+                if col_ng in df.columns:
+                    fig.add_trace(go.Scattergl(x=df['Datetime'], y=df[col_ng], name=f"Ng M{i_m} (%)", line=dict(color=cores_ng[i_m-1], width=2)), row=5, col=1)
+            if l_ng_red is not None: fig.add_hline(y=l_ng_red, line_dash="dash", line_color="red", row=5, col=1)
+            if l_ng_yel is not None and l_ng_red is not None: fig.add_hrect(y0=l_ng_yel, y1=l_ng_red, fillcolor="rgba(241, 196, 15, 0.2)", layer="below", line_width=0, row=5, col=1)
                     
-            if 'E1 NP %' in df.columns:
-                fig.add_trace(go.Scattergl(x=df['Datetime'], y=df['E1 NP %'], name="Nh (%)", fill='tozeroy', fillcolor='rgba(241, 196, 15, 0.1)', line=dict(color='#f1c40f', width=2)), row=6, col=1)
-                if l_nh_red is not None: 
-                    fig.add_hline(y=l_nh_red, line_dash="dash", line_color="red", row=6, col=1)
-                if l_nh_yel is not None and l_nh_red is not None: 
-                    fig.add_hrect(y0=l_nh_yel, y1=l_nh_red, fillcolor="rgba(241, 196, 15, 0.2)", layer="below", line_width=0, row=6, col=1)
+            for i_m in range(1, qtd_motores_config + 1):
+                col_nh = f'E{i_m} NP %'
+                if col_nh in df.columns:
+                    fig.add_trace(go.Scattergl(x=df['Datetime'], y=df[col_nh], name=f"Nh M{i_m} (%)", line=dict(color=cores_nh[i_m-1], width=2)), row=6, col=1)
+            if l_nh_red is not None: fig.add_hline(y=l_nh_red, line_dash="dash", line_color="red", row=6, col=1)
+            if l_nh_yel is not None and l_nh_red is not None: fig.add_hrect(y0=l_nh_yel, y1=l_nh_red, fillcolor="rgba(241, 196, 15, 0.2)", layer="below", line_width=0, row=6, col=1)
             
             fig.update_xaxes(showspikes=True, spikecolor="white", spikesnap="cursor", spikemode="across", spikethickness=1, spikedash="dot")
             fig.update_yaxes(showspikes=True, spikecolor="gray", spikethickness=1, spikedash="dot")
@@ -936,7 +1034,9 @@ if arquivos_up:
                     df_acro = df[(df['Pitch'] > 45) | (df['Pitch'] < -45) | (df['Roll'] > 60) | (df['Roll'] < -60)]
                     if not df_acro.empty:
                         st.markdown(f"**Atitudes anormais:** {len(df_acro)} momentos.")
-                        colunas_acro = ['Lcl Time', 'AltMSL', 'IAS', 'Pitch', 'Roll', 'NormAc', 'E1 Torq ft lbs', 'E1 ITT', 'E1 NG', 'E1 NP %']
+                        colunas_acro = ['Lcl Time', 'AltMSL', 'IAS', 'Pitch', 'Roll', 'NormAc']
+                        for j in range(1, qtd_motores_config + 1):
+                            colunas_acro.extend([f'E{j} Torq ft lbs', f'E{j} ITT', f'E{j} NG', f'E{j} NP %'])
                         colunas_acro = [c for c in colunas_acro if c in df.columns]
                         exibir_tabela_grande(df_acro.sort_values(by='NormAc', ascending=False).head(20)[colunas_acro].copy())
                     else: 
@@ -960,3 +1060,45 @@ if arquivos_up:
             st.session_state.obs_manobras = st.text_area("Escreva aqui:", value=st.session_state.obs_manobras, key='k_manob')
             if st.button("💾 Salvar Comentário", key="b_manob"): 
                 st.success("Salvo com sucesso!")
+
+        with aba_relatorio:
+            st.header("📝 Editor do Relatório Final")
+            st.markdown("Confirme ou edite os dados extraídos antes de gerar o documento Word oficial.")
+
+            st.subheader("1. Edição do Logbook da Missão")
+            col_t1, col_t2, col_t3, col_t4, col_t5 = st.columns(5)
+            with col_t1: temp_ac = st.text_input("Acionamento:", tempos.get('acionamento','-'))
+            with col_t2: temp_dec = st.text_input("Decolagem:", tempos.get('decolagem','-'))
+            with col_t3: temp_pou = st.text_input("Pouso:", tempos.get('pouso','-'))
+            with col_t4: temp_cor = st.text_input("Corte:", tempos.get('corte','-'))
+            with col_t5: temp_voo = st.text_input("Tempo de Voo:", tempos.get('t_voo','-'))
+            
+            tempos_editados = {
+                'acionamento': temp_ac,
+                'decolagem': temp_dec,
+                'pouso': temp_pou,
+                'corte': temp_cor,
+                't_voo': temp_voo
+            }
+
+            st.subheader("2. Edição de Alertas do Voo")
+            st.caption("Pode apagar linhas falsas ou reescrever motivos. (Mantenha o texto 🔴 ou 🟡 para o Word aplicar a cor).")
+            alertas_txt = st.text_area("Lista de Alertas (Um por linha):", value="\n".join(alertas), height=150)
+
+            st.info("As observações (Campo 3) digitadas e salvas nas outras abas serão incluídas automaticamente no documento final.")
+            obs_solo_atual = {
+                "Resumo de Painel e Rota": st.session_state.obs_resumo,
+                "Inspetoria e Graficos": st.session_state.obs_graficos,
+                "Avaliador de Manobras e Pouso": st.session_state.obs_manobras
+            }
+
+            st.divider()
+            st.subheader("🖨️ Gerar Documento Word")
+            docx_bytes_solo_editado = gerar_docx_solo_editado(tempos_editados, alertas_txt, obs_solo_atual)
+            st.download_button(
+                label="💾 BAIXAR RELATÓRIO OFICIAL (.DOCX)", 
+                data=docx_bytes_solo_editado, 
+                file_name="Inspetoria_Relatorio.docx", 
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
+                use_container_width=True
+            )
