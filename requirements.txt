@@ -4,4 +4,4 @@ numpy
 plotly
 simplekml
 python-docx
-google-generativeai
+google-genai
