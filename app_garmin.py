@@ -11,13 +11,13 @@ import os
 import json
 from datetime import datetime
 import streamlit.components.v1 as components
-import google.generativeai as genai
+from google import genai
 
 # ==========================================
 # CONFIGURAÇÃO DA INTELIGÊNCIA ARTIFICIAL
 # ==========================================
-# GERE A SUA CHAVE GRATUITA EM: aistudio.google.com
-genai.configure(api_key=["AIzaSyC-AQ.Ab8RN6IfhtEtFAPPVwu0FQWg3D6m1QYRhSsYayYEd0807o0npg"])
+# Cole a sua chave entre as aspas abaixo:
+client_ai = genai.Client(api_key="AIzaSyCYKXcpVEQ_NpPcUSxIr9svHMiOl6BGeko")
 
 
 # ==========================================
@@ -443,7 +443,6 @@ def exibir_tabela_grande(df_view):
             df_traduzido[col] = df_traduzido[col].apply(lambda x: f"{x:.2f}" if pd.notnull(x) else "-")
     render_html_table(df_traduzido)
 
-# Função para inserir imagens de forma segura no Word
 def injetar_graficos_word(doc, graficos_dict):
     if any(fig is not None for fig in graficos_dict.values()):
         doc.add_heading("ANEXOS GRÁFICOS", level=1)
@@ -456,7 +455,6 @@ def injetar_graficos_word(doc, graficos_dict):
                 except Exception as e:
                     doc.add_paragraph(f"[Aviso: Não foi possível exportar a imagem '{titulo_grafico}'. O servidor pode estar sem a biblioteca 'kaleido'].")
 
-# Gerador Word VOO SOLO
 def gerar_docx_solo_editado(tempos_dict, alertas_texto, obs_dict, graficos_dict):
     doc = Document()
     titulo = doc.add_heading("RELATÓRIO OFICIAL DE INSPETORIA - VOO SOLO", 0)
@@ -504,7 +502,6 @@ def gerar_docx_solo_editado(tempos_dict, alertas_texto, obs_dict, graficos_dict)
     doc.save(io_bytes)
     return io_bytes.getvalue()
 
-# Gerador Word FORMATURA
 def gerar_docx_formatura_editado(arq_lider, arq_ala, obs_dict, graficos_dict):
     doc = Document()
     titulo = doc.add_heading("RELATÓRIO TÁTICO DE FORMATURA", 0)
@@ -534,7 +531,6 @@ def gerar_docx_formatura_editado(arq_lider, arq_ala, obs_dict, graficos_dict):
     doc.save(io_bytes)
     return io_bytes.getvalue()
 
-# Gerador Word COMPARATIVO DE MÁQUINA (TREND MONITORING)
 def gerar_docx_comparativo_editado(arq_a, arq_b, df_metricas, obs_dict, graficos_dict):
     doc = Document()
     titulo = doc.add_heading("RELATÓRIO DE TREND MONITORING (COMPARATIVO)", 0)
@@ -686,8 +682,10 @@ if arquivos_up:
 
                         st.divider()
                         st.markdown("📝 **Observações - Distância**")
-                        st.session_state.obs_distancia = st.text_area("Escreva aqui:", value=st.session_state.obs_distancia, key='k_dist')
-                        if st.button("💾 Salvar Comentário", key="b_dist"): st.success("Salvo com sucesso!")
+                        obs_dist_tmp = st.text_area("Escreva aqui:", value=st.session_state.obs_distancia, key='k_dist')
+                        if st.button("💾 Salvar Comentário", key="b_dist"): 
+                            st.session_state.obs_distancia = obs_dist_tmp
+                            st.success("Salvo com sucesso!")
 
                     with aba_comp:
                         st.header("Comparativo Dinâmico e Motores")
@@ -709,8 +707,10 @@ if arquivos_up:
 
                         st.divider()
                         st.markdown("📝 **Observações - Comparativo de Motores**")
-                        st.session_state.obs_comparativo = st.text_area("Escreva aqui:", value=st.session_state.obs_comparativo, key='k_comp')
-                        if st.button("💾 Salvar Comentário", key="b_comp"): st.success("Salvo com sucesso!")
+                        obs_comp_tmp = st.text_area("Escreva aqui:", value=st.session_state.obs_comparativo, key='k_comp')
+                        if st.button("💾 Salvar Comentário", key="b_comp"): 
+                            st.session_state.obs_comparativo = obs_comp_tmp
+                            st.success("Salvo com sucesso!")
 
                     with aba_3d:
                         st.header("Trajetória 3D Sincronizada")
@@ -721,14 +721,36 @@ if arquivos_up:
                         st.plotly_chart(fig_3d, use_container_width=True)
                         st.divider()
                         st.markdown("📝 **Observações - Trajetória 3D**")
-                        st.session_state.obs_3d = st.text_area("Escreva aqui:", value=st.session_state.obs_3d, key='k_3d')
-                        if st.button("💾 Salvar Comentário", key="b_3d"): st.success("Salvo com sucesso!")
+                        obs_3d_tmp = st.text_area("Escreva aqui:", value=st.session_state.obs_3d, key='k_3d')
+                        if st.button("💾 Salvar Comentário", key="b_3d"): 
+                            st.session_state.obs_3d = obs_3d_tmp
+                            st.success("Salvo com sucesso!")
 
                     with aba_rel_form:
                         st.header("📝 Editor do Relatório Final (Formatura)")
                         c1, c2 = st.columns(2)
                         with c1: lider_editado = st.text_input("Ficheiro Líder:", arq_lider)
                         with c2: ala_editado = st.text_input("Ficheiro Ala:", arq_ala)
+                        
+                        st.divider()
+                        st.markdown("🪄 **Auto-Debriefing Tático com IA**")
+                        if st.button("Escrever Parecer de Formatura com IA", key="btn_ia_form"):
+                            with st.spinner("A IA está analisando a formatura..."):
+                                try:
+                                    prompt_form = f"""
+                                    Atue como um Piloto Inspetor da Força Aérea Brasileira.
+                                    Faça um breve debriefing técnico (máximo 2 parágrafos) de um voo em formatura.
+                                    Aeronave Líder: {arq_lider}
+                                    Aeronave Ala: {arq_ala}
+                                    Escreva com jargão militar de aviação que a missão foi avaliada quanto à dispersão geométrica e aos parâmetros dinâmicos de motor (Ng, ITT, Torque). Seja profissional e direto.
+                                    """
+                                    response = client_ai.models.generate_content(model='gemini-3.8-flash', contents=prompt_form)
+                                    st.session_state.obs_comparativo = response.text
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Erro na IA: Verifique a chave na linha 20. Detalhe: {e}")
+                        
+                        st.info("As observações editadas nas outras abas (ou criadas pela IA) serão incluídas automaticamente no Word.")
                         
                         obs_formatura_atual = {
                             "Posicionamento e Distancia": st.session_state.obs_distancia,
@@ -813,8 +835,10 @@ if arquivos_up:
                     
                     st.divider()
                     st.markdown("📝 **Parecer Técnico - Deltas**")
-                    st.session_state.obs_resumo = st.text_area("Escreva aqui:", value=st.session_state.obs_resumo, key='k_comp_resumo')
-                    if st.button("💾 Salvar Comentário", key="b_comp_res"): st.success("Salvo!")
+                    obs_resumo_tmp = st.text_area("Escreva aqui:", value=st.session_state.obs_resumo, key='k_comp_resumo')
+                    if st.button("💾 Salvar Comentário", key="b_comp_res"): 
+                        st.session_state.obs_resumo = obs_resumo_tmp
+                        st.success("Salvo!")
 
                 with aba_graf_comp:
                     st.header("Gráficos de Comportamento Sobrepostos")
@@ -839,8 +863,10 @@ if arquivos_up:
 
                     st.divider()
                     st.markdown("📝 **Parecer Técnico - Gráficos e Comportamento**")
-                    st.session_state.obs_graficos = st.text_area("Escreva aqui:", value=st.session_state.obs_graficos, key='k_comp_graficos')
-                    if st.button("💾 Salvar Comentário", key="b_comp_graf"): st.success("Salvo!")
+                    obs_graficos_tmp = st.text_area("Escreva aqui:", value=st.session_state.obs_graficos, key='k_comp_graficos')
+                    if st.button("💾 Salvar Comentário", key="b_comp_graf"): 
+                        st.session_state.obs_graficos = obs_graficos_tmp
+                        st.success("Salvo!")
 
                 with aba_rel_comp:
                     st.header("📝 Gerar Relatório de Trend Monitoring")
@@ -1011,8 +1037,10 @@ if arquivos_up:
 
                 st.divider()
                 st.markdown("📝 **Observações - Resumo de Painel e Rota**")
-                st.session_state.obs_resumo = st.text_area("Escreva aqui:", value=st.session_state.obs_resumo, key='k_res')
-                if st.button("💾 Salvar Comentário", key="b_res"): st.success("Salvo com sucesso!")
+                obs_res_tmp = st.text_area("Escreva aqui:", value=st.session_state.obs_resumo, key='k_res')
+                if st.button("💾 Salvar Comentário", key="b_res"): 
+                    st.session_state.obs_resumo = obs_res_tmp
+                    st.success("Salvo com sucesso!")
 
             with aba_inspetoria:
                 st.subheader("Auditoria de Zonas Amarelas e Vermelhas")
@@ -1072,35 +1100,10 @@ if arquivos_up:
 
                 st.divider()
                 st.markdown("📝 **Observações - Inspetoria e Gráficos**")
-                
-                # BOTAO INTELIGENCIA ARTIFICIAL AQUI
-                col_ia, col_save = st.columns([1, 1])
-                with col_ia:
-                    if st.button("🪄 Escrever Parecer Técnico com IA", key="btn_ia_solo"):
-                        with st.spinner("A IA está analisando os parâmetros do voo..."):
-                            try:
-                                texto_alertas = ", ".join(alertas) if alertas else "Nenhum alerta. Voo dentro dos limites normais."
-                                prompt = f"""
-                                Atue como um Engenheiro de Manutenção da Força Aérea Brasileira.
-                                Analise os seguintes dados da telemetria:
-                                - Força G Máxima: {max_g:.2f}G
-                                - Força G Mínima: {min_g:.2f}G
-                                - Alertas disparados: {texto_alertas}
-                                
-                                Escreva um parecer técnico curto (máx 2 parágrafos) avaliando a integridade estrutural e parâmetros de motor. Use jargão de manutenção aeronáutica. Não invente dados além destes.
-                                """
-                                modelo = genai.GenerativeModel('gemini-1.5-flash')
-                                resposta = modelo.generate_content(prompt)
-                                st.session_state.obs_graficos = resposta.text
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Erro na IA: Certifique-se de colocar a sua chave na linha 18 do código. Detalhe: {e}")
-
-                with col_save:
-                    if st.button("💾 Salvar Comentário Manual", key="b_graf"): 
-                        st.success("Salvo com sucesso!")
-
-                st.session_state.obs_graficos = st.text_area("Texto do Relatório:", value=st.session_state.obs_graficos, key='k_graf', height=200)
+                obs_graf_tmp_manual = st.text_area("Escreva o seu parecer manual aqui:", value=st.session_state.obs_graficos, key='k_graf_manual')
+                if st.button("💾 Salvar Comentário Manual", key="b_graf_manual"): 
+                    st.session_state.obs_graficos = obs_graf_tmp_manual
+                    st.success("Salvo com sucesso!")
 
             with aba_manobras:
                 c_m1, c_m2 = st.columns(2)
@@ -1136,8 +1139,10 @@ if arquivos_up:
 
                 st.divider()
                 st.markdown("📝 **Observações - Avaliador de Manobras e Pouso**")
-                st.session_state.obs_manobras = st.text_area("Escreva aqui:", value=st.session_state.obs_manobras, key='k_manob')
-                if st.button("💾 Salvar Comentário", key="b_manob"): st.success("Salvo com sucesso!")
+                obs_manob_tmp = st.text_area("Escreva aqui:", value=st.session_state.obs_manobras, key='k_manob')
+                if st.button("💾 Salvar Comentário", key="b_manob"): 
+                    st.session_state.obs_manobras = obs_manob_tmp
+                    st.success("Salvo com sucesso!")
 
             with aba_relatorio:
                 st.header("📝 Editor do Relatório Final")
@@ -1152,6 +1157,35 @@ if arquivos_up:
 
                 st.subheader("2. Edição de Alertas do Voo")
                 alertas_txt = st.text_area("Lista de Alertas (Um por linha):", value="\n".join(alertas), height=150)
+                
+                # --- BOTÃO DA IA NO VOO SOLO ---
+                st.divider()
+                st.markdown("🪄 **Auto-Debriefing com IA**")
+                if st.button("Escrever Parecer Técnico do Voo Solo com IA", key="btn_ia_solo_rel"):
+                    with st.spinner("A IA está analisando os parâmetros do voo..."):
+                        try:
+                            texto_alertas = ", ".join(alertas) if alertas else "Nenhum alerta. Voo dentro dos limites normais."
+                            prompt = f"""
+                            Atue como um Engenheiro de Manutenção da Força Aérea Brasileira.
+                            Analise os seguintes dados da telemetria:
+                            - Força G Máxima: {max_g:.2f}G
+                            - Força G Mínima: {min_g:.2f}G
+                            - Alertas disparados: {texto_alertas}
+                            
+                            Escreva um parecer técnico curto (máx 2 parágrafos) avaliando a integridade estrutural e parâmetros de motor. Use jargão de manutenção aeronáutica. Não invente dados além destes.
+                            """
+                            response = client_ai.models.generate_content(model='gemini-3.8-flash', contents=prompt)
+                            st.session_state.obs_graficos = response.text
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro na IA: Certifique-se de que colou a API Key válida na linha 20. Detalhe do erro: {e}")
+                
+                st.info("Aqui pode ver e editar o texto final da seção 'Inspetoria e Gráficos' (quer tenha sido escrito por si na 2ª aba, ou gerado agora mesmo pela IA):")
+                obs_graf_tmp_rel = st.text_area("Parecer Técnico (Editável):", value=st.session_state.obs_graficos, key='k_graf_rel', height=200)
+                if st.button("💾 Guardar Edição Final", key="b_graf_rel"):
+                    st.session_state.obs_graficos = obs_graf_tmp_rel
+                    st.success("Texto final guardado!")
+                # --------------------------------
                 
                 obs_solo_atual = {
                     "Resumo de Painel e Rota": st.session_state.obs_resumo, 
