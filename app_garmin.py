@@ -1438,7 +1438,8 @@ if arquivos_up:
                     st.success("Salvo com sucesso!")
 
             with aba_relatorio:
-                st.header("📝 Editor do Relatório Final")
+                st.header("📝 Editor do Relatório Final (Voo Solo)")
+        
                 st.subheader("1. Edição do Logbook da Missão")
                 col_t1, col_t2, col_t3, col_t4, col_t5 = st.columns(5)
                 with col_t1: temp_ac = st.text_input("Acionamento:", tempos.get('acionamento','-'))
@@ -1449,7 +1450,7 @@ if arquivos_up:
                 tempos_editados = {'acionamento': temp_ac, 'decolagem': temp_dec, 'pouso': temp_pou, 'corte': temp_cor, 't_voo': temp_voo}
 
                 st.subheader("2. Edição de Alertas do Voo")
-                alertas_txt = st.text_area("Lista de Alertas (Um por linha):", value="\n".join(alertas), height=150)
+                alertas_txt = st.text_area("Lista de Alertas (Um por linha):", value="\n".join(alertas), height=120)
                 
                 # --- BOTÃO DA IA NO VOO SOLO ---
                 st.divider()
