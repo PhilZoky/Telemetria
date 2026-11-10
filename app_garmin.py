@@ -11,6 +11,14 @@ import os
 import json
 from datetime import datetime
 import streamlit.components.v1 as components
+import google.generativeai as genai
+
+# ==========================================
+# CONFIGURAÇÃO DA INTELIGÊNCIA ARTIFICIAL
+# ==========================================
+# GERE A SUA CHAVE GRATUITA EM: aistudio.google.com
+genai.configure(api_key=st.secrets["AQ.Ab8RN6IfhtEtFAPPVwu0FQWg3D6m1QYRhSsYayYEd0807o0npg"])
+
 
 # ==========================================
 # 0. SISTEMA DE LOGIN E CADASTRO (SaaS)
@@ -487,7 +495,6 @@ def gerar_docx_solo_editado(tempos_dict, alertas_texto, obs_dict, graficos_dict)
             doc.add_paragraph(str(texto))
     if not tem_obs: doc.add_paragraph("Nenhuma observação inserida.")
         
-    # Injetando as Imagens Salvas no Relatório
     injetar_graficos_word(doc, graficos_dict)
         
     doc.add_paragraph("\n\n____________________________________________").alignment = 1
@@ -518,7 +525,6 @@ def gerar_docx_formatura_editado(arq_lider, arq_ala, obs_dict, graficos_dict):
             doc.add_paragraph(str(texto))
     if not tem_obs: doc.add_paragraph("Nenhuma observação inserida no dossiê.")
         
-    # Injetando as Imagens Salvas no Relatório
     injetar_graficos_word(doc, graficos_dict)
         
     doc.add_paragraph("\n\n____________________________________________").alignment = 1
@@ -574,7 +580,6 @@ def gerar_docx_comparativo_editado(arq_a, arq_b, df_metricas, obs_dict, graficos
     if not tem_obs:
         doc.add_paragraph("Nenhuma observação inserida.")
 
-    # Injetando as Imagens Salvas no Relatório
     injetar_graficos_word(doc, graficos_dict)
 
     doc.add_paragraph("\n\n____________________________________________").alignment = 1
@@ -1067,8 +1072,35 @@ if arquivos_up:
 
                 st.divider()
                 st.markdown("📝 **Observações - Inspetoria e Gráficos**")
-                st.session_state.obs_graficos = st.text_area("Escreva aqui:", value=st.session_state.obs_graficos, key='k_graf')
-                if st.button("💾 Salvar Comentário", key="b_graf"): st.success("Salvo com sucesso!")
+                
+                # BOTAO INTELIGENCIA ARTIFICIAL AQUI
+                col_ia, col_save = st.columns([1, 1])
+                with col_ia:
+                    if st.button("🪄 Escrever Parecer Técnico com IA", key="btn_ia_solo"):
+                        with st.spinner("A IA está analisando os parâmetros do voo..."):
+                            try:
+                                texto_alertas = ", ".join(alertas) if alertas else "Nenhum alerta. Voo dentro dos limites normais."
+                                prompt = f"""
+                                Atue como um Engenheiro de Manutenção da Força Aérea Brasileira.
+                                Analise os seguintes dados da telemetria:
+                                - Força G Máxima: {max_g:.2f}G
+                                - Força G Mínima: {min_g:.2f}G
+                                - Alertas disparados: {texto_alertas}
+                                
+                                Escreva um parecer técnico curto (máx 2 parágrafos) avaliando a integridade estrutural e parâmetros de motor. Use jargão de manutenção aeronáutica. Não invente dados além destes.
+                                """
+                                modelo = genai.GenerativeModel('gemini-1.5-flash')
+                                resposta = modelo.generate_content(prompt)
+                                st.session_state.obs_graficos = resposta.text
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro na IA: Certifique-se de colocar a sua chave na linha 18 do código. Detalhe: {e}")
+
+                with col_save:
+                    if st.button("💾 Salvar Comentário Manual", key="b_graf"): 
+                        st.success("Salvo com sucesso!")
+
+                st.session_state.obs_graficos = st.text_area("Texto do Relatório:", value=st.session_state.obs_graficos, key='k_graf', height=200)
 
             with aba_manobras:
                 c_m1, c_m2 = st.columns(2)
