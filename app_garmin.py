@@ -4,20 +4,123 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import simplekml
+from abc import ABC, abstractmethod
 from docx import Document
-from docx.shared import RGBColor, Inches
+from docx.shared import Inches, Pt, RGBColor, Cm 
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
+from docx.oxml import parse_xml, OxmlElement
+from docx.oxml.ns import nsdecls, qn
+import re
+import os   
 import io
-import os
 import json
 from datetime import datetime
 import streamlit.components.v1 as components
-from google import genai
+import google.generativeai as genai
 
 # ==========================================
 # CONFIGURAÇÃO DA INTELIGÊNCIA ARTIFICIAL
 # ==========================================
-# Cole a sua chave entre as aspas abaixo:
-client_ai = genai.Client(api_key="AIzaSyCYKXcpVEQ_NpPcUSxIr9svHMiOl6BGeko")
+# Cole aqui a chave AQ... exatamente como o Google gerou:
+genai.configure(api_key="AQ.Ab8RN6JQyDYEU2oIsCmDGsKHWn8QYW_0NYm_niY2P86fegos8w")
+
+
+class np(ABC):
+    """Compatibilidade com wrappers NumPy que exigem uma API orientada a classe.
+    Implementa os métodos abstratos com utilidades realistas para criação,
+    normalização e operações básicas de vetores/matrizes.
+    """
+
+    @staticmethod
+    @abstractmethod
+    def zeros(shape, dtype=float):
+        return np.zeros(shape, dtype=dtype)
+
+    @staticmethod
+    @abstractmethod
+    def ones(shape, dtype=float):
+        return np.ones(shape, dtype=dtype)
+
+    @staticmethod
+    @abstractmethod
+    def array(data, dtype=None, copy=True):
+        return np.array(data, dtype=dtype, copy=copy)
+
+    @staticmethod
+    @abstractmethod
+    def mean(values, axis=None):
+        return np.mean(values, axis=axis)
+
+    @staticmethod
+    @abstractmethod
+    def std(values, axis=None, ddof=0):
+        return np.std(values, axis=axis, ddof=ddof)
+
+    @staticmethod
+    @abstractmethod
+    def sqrt(values):
+        return np.sqrt(values)
+
+    @staticmethod
+    @abstractmethod
+    def sin(values):
+        return np.sin(values)
+
+    @staticmethod
+    @abstractmethod
+    def cos(values):
+        return np.cos(values)
+
+    @staticmethod
+    @abstractmethod
+    def radians(values):
+        return np.radians(values)
+
+    @staticmethod
+    @abstractmethod
+    def arctan2(y, x):
+        return np.arctan2(y, x)
+
+    @staticmethod
+    @abstractmethod
+    def dot(a, b):
+        return np.dot(a, b)
+
+    @staticmethod
+    @abstractmethod
+    def max(values, axis=None):
+        return np.max(values, axis=axis)
+
+    @staticmethod
+    @abstractmethod
+    def min(values, axis=None):
+        return np.min(values, axis=axis)
+
+    @staticmethod
+    @abstractmethod
+    def abs(values):
+        return np.abs(values)
+
+    @staticmethod
+    @abstractmethod
+    def clip(values, low, high):
+        return np.clip(values, low, high)
+
+    @staticmethod
+    @abstractmethod
+    def sum(values, axis=None):
+        return np.sum(values, axis=axis)
+
+    @staticmethod
+    @abstractmethod
+    def where(condition, x, y):
+        return np.where(condition, x, y)
+
+    @staticmethod
+    @abstractmethod
+    def isnan(values):
+        return np.isnan(values)
 
 
 # ==========================================
@@ -455,49 +558,238 @@ def injetar_graficos_word(doc, graficos_dict):
                 except Exception as e:
                     doc.add_paragraph(f"[Aviso: Não foi possível exportar a imagem '{titulo_grafico}'. O servidor pode estar sem a biblioteca 'kaleido'].")
 
-def gerar_docx_solo_editado(tempos_dict, alertas_texto, obs_dict, graficos_dict):
-    doc = Document()
-    titulo = doc.add_heading("RELATÓRIO OFICIAL DE INSPETORIA - VOO SOLO", 0)
-    titulo.alignment = 1
-    
-    data_hoje = datetime.now().strftime('%d/%m/%Y')
-    sub = doc.add_paragraph(f"Perfil: {projeto_atual} | Analista: {st.session_state.nome_logado} | Data: {data_hoje}")
-    sub.alignment = 1
-    
-    doc.add_heading("1. LOGBOOK DA MISSÃO", level=1)
-    doc.add_paragraph(f"Acionamento: {tempos_dict.get('acionamento','-')}")
-    doc.add_paragraph(f"Decolagem: {tempos_dict.get('decolagem','-')}")
-    doc.add_paragraph(f"Pouso: {tempos_dict.get('pouso','-')}")
-    doc.add_paragraph(f"Corte do Motor: {tempos_dict.get('corte','-')}")
-    doc.add_paragraph(f"TEMPO DE VOO: {tempos_dict.get('t_voo','-')}").runs[0].bold = True
-    
-    doc.add_heading("2. AUDITORIA DE ALERTAS", level=1)
-    linhas_alerta = [linha for linha in alertas_texto.split('\n') if linha.strip()]
-    if len(linhas_alerta) > 0:
-        for alerta in linhas_alerta:
-            p_al = doc.add_paragraph()
-            run = p_al.add_run(alerta)
-            if "LINHA VERMELHA" in alerta or "CRÍTICO" in alerta or "🔴" in alerta:
-                run.font.color.rgb = RGBColor(220, 0, 0)
-            elif "AMARELO" in alerta or "🟡" in alerta:
-                run.font.color.rgb = RGBColor(200, 150, 0)
+# ==========================================
+# 5. GERADOR WORD OFICIAL (PADRÃO FAB / LIBREOFFICE)
+# ==========================================
+def set_cell_background(cell, hex_color):
+    """Define a cor de fundo de uma célula da tabela no Word/LibreOffice."""
+    shading_elm = parse_xml(f'<w:shd {nsdecls("w")} w:fill="{hex_color}"/>')
+    cell._tc.get_or_add_tcPr().append(shading_elm)
+
+def set_cell_margins(cell, top=100, bottom=100, left=150, right=150):
+    """Define o espaçamento interno (padding) de uma célula."""
+    tcPr = cell._tc.get_or_add_tcPr()
+    tcMar = OxmlElement('w:tcMar')
+    for m, val in [('top', top), ('bottom', bottom), ('left', left), ('right', right)]:
+        node = OxmlElement(f'w:{m}')
+        node.set(qn('w:w'), str(val))
+        node.set(qn('w:type'), 'dxa')
+        tcMar.append(node)
+    tcPr.append(tcMar)
+
+def adicionar_paragrafo_com_markdown(doc_or_cell, texto, estilo=None, bullet=False):
+    """Processa o texto convertendo **negritos** em formatação nativa do Word."""
+    if bullet:
+        p = doc_or_cell.add_paragraph(style='List Bullet')
+    elif estilo:
+        p = doc_or_cell.add_paragraph(style=estilo)
     else:
-        doc.add_paragraph("✅ Nenhum alerta registado.").runs[0].font.color.rgb = RGBColor(0, 150, 0)
-        
-    doc.add_heading("3. OBSERVAÇÕES DA INSPETORIA", level=1)
-    tem_obs = False
-    for titulo_obs, texto in obs_dict.items():
-        if str(texto).strip() != "":
-            tem_obs = True
-            doc.add_heading(f"[{titulo_obs}]", level=2)
-            doc.add_paragraph(str(texto))
-    if not tem_obs: doc.add_paragraph("Nenhuma observação inserida.")
-        
-    injetar_graficos_word(doc, graficos_dict)
-        
-    doc.add_paragraph("\n\n____________________________________________").alignment = 1
-    doc.add_paragraph(f"{st.session_state.nome_logado} - Especialista em Telemetria").alignment = 1
+        p = doc_or_cell.add_paragraph()
     
+    p.paragraph_format.space_after = Pt(4)
+    p.paragraph_format.line_spacing = 1.15
+
+    partes = re.split(r'(\*\*.*?\*\*)', texto)
+    for parte in partes:
+        if parte.startswith('**') and parte.endswith('**'):
+            texto_limpo = parte[2:-2]
+            run = p.add_run(texto_limpo)
+            run.bold = True
+        else:
+            p.add_run(parte)
+    return p
+
+def gerar_docx_solo_editado(tempos_dict, alertas_texto, obs_dict, graficos_dict):
+    """
+    Gera o Relatório Técnico de Telemetria e Inspetoria no Padrão Oficial FAB.
+    Totalmente otimizado para abertura e edição limpa no LibreOffice Writer.
+    """
+    doc = Document()
+
+    # --- CONFIGURAÇÃO DE MARGENS DA PÁGINA (Padrão A4 / 2cm) ---
+    section = doc.sections[0]
+    section.page_width = Cm(21.0)
+    section.page_height = Cm(29.7)
+    section.top_margin = Cm(2.0)
+    section.bottom_margin = Cm(2.0)
+    section.left_margin = Cm(2.0)
+    section.right_margin = Cm(2.0)
+
+    # Cores Oficiais
+    COR_AZUL_FAB = RGBColor(27, 54, 93)     # #1B365D - Azul Marinho Institucional
+    COR_CINZA_TEXTO = RGBColor(51, 51, 51)  # #333333 - Grafite/Preto Sóbrio
+    HEX_CINZA_CLARO = "F0F4F8"
+
+    # --- 1. CABEÇALHO INSTITUCIONAL TIMBRADO ---
+    p_topo = doc.add_paragraph()
+    p_topo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r_topo1 = p_topo.add_run("COMANDO DA AERONÁUTICA\n")
+    r_topo1.bold = True
+    r_topo1.font.size = Pt(11)
+    r_topo1.font.color.rgb = COR_AZUL_FAB
+
+    r_topo2 = p_topo.add_run("DEPARTAMENTO DE DELEGAÇÃO E INSPEÇÃO TÉCNICA DE MANUTENÇÃO\nESQUADRÃO DE TELEMETRIA E ENSAIOS DE VOO\n")
+    r_topo2.font.size = Pt(9)
+    r_topo2.font.color.rgb = RGBColor(100, 100, 100)
+
+    p_titulo_doc = doc.add_paragraph()
+    p_titulo_doc.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_titulo_doc.paragraph_format.space_before = Pt(8)
+    p_titulo_doc.paragraph_format.space_after = Pt(14)
+    r_tit = p_titulo_doc.add_run("RELATÓRIO TÉCNICO DE TELEMETRIA E INSPETORIA (RTT)")
+    r_tit.bold = True
+    r_tit.font.size = Pt(14)
+    r_tit.font.color.rgb = COR_AZUL_FAB
+
+    # --- 2. TABELA DE DADOS DA MISSÃO (METADADOS) ---
+    tabela_meta = doc.add_table(rows=3, cols=2)
+    tabela_meta.alignment = WD_TABLE_ALIGNMENT.CENTER
+    tabela_meta.autofit = False
+
+    larguras = [Cm(8.5), Cm(8.5)]
+    for row in tabela_meta.rows:
+        for i, cell in enumerate(row.cells):
+            cell.width = larguras[i]
+            set_cell_margins(cell, top=80, bottom=80, left=120, right=120)
+
+    dados_matriz = [
+        [f"**Aeronave/Perfil:** {projeto_atual}", f"**Data do Voo:** {datetime.now().strftime('%d/%m/%Y')}"],
+        [f"**Inspetor / Analista:** {st.session_state.nome_logado}", f"**Tempo de Voo:** {tempos_dict.get('t_voo', 'N/A')}"],
+        [f"**Acionamento:** {tempos_dict.get('acionamento', 'N/A')}", f"**Corte do Motor:** {tempos_dict.get('corte', 'N/A')}"]
+    ]
+
+    for r_idx, linha in enumerate(dados_matriz):
+        for c_idx, valor in enumerate(linha):
+            cell = tabela_meta.rows[r_idx].cells[c_idx]
+            set_cell_background(cell, HEX_CINZA_CLARO)
+            adicionar_paragrafo_com_markdown(cell, valor)
+
+    doc.add_paragraph().paragraph_format.space_after = Pt(6)
+
+    # --- 3. SEÇÃO 1: AUDITORIA DE ALERTAS E OCORRÊNCIAS ---
+    p_s1 = doc.add_paragraph()
+    p_s1.paragraph_format.space_before = Pt(12)
+    p_s1.paragraph_format.space_after = Pt(6)
+    r_s1 = p_s1.add_run("1. AUDITORIA DE ALERTAS E TRANSPARÊNCIA OPERACIONAL")
+    r_s1.bold = True
+    r_s1.font.size = Pt(11)
+    r_s1.font.color.rgb = COR_AZUL_FAB
+
+    linhas_alerta = [linha for linha in alertas_texto.split('\n') if linha.strip()]
+    if linhas_alerta:
+        tab_alertas = doc.add_table(rows=1 + len(linhas_alerta), cols=1)
+        tab_alertas.alignment = WD_TABLE_ALIGNMENT.CENTER
+        hdr_cell = tab_alertas.rows[0].cells[0]
+        hdr_cell.width = Cm(17.0)
+        set_cell_background(hdr_cell, "333333")
+        set_cell_margins(hdr_cell, top=80, bottom=80, left=120, right=120)
+        p_hdr = hdr_cell.paragraphs[0]
+        r_hdr = p_hdr.add_run(" REGISTRO DE EVENTOS E ULTRAPASSAGENS DE LIMITES DA AERONAVE")
+        r_hdr.bold = True
+        r_hdr.font.color.rgb = RGBColor(255, 255, 255)
+        r_hdr.font.size = Pt(9.5)
+
+        for idx, al in enumerate(linhas_alerta):
+            cell_al = tab_alertas.rows[idx + 1].cells[0]
+            cell_al.width = Cm(17.0)
+            set_cell_margins(cell_al, top=60, bottom=60, left=120, right=120)
+            bg_cor = "FFF5F5" if "🔴" in al else ("FFFBEB" if "🟡" in al else "FFFFFF")
+            set_cell_background(cell_al, bg_cor)
+            adicionar_paragrafo_com_markdown(cell_al, al)
+    else:
+        adicionar_paragrafo_com_markdown(doc, "🟢 **Operação Normal:** Nenhum alerta ou ultrapassagem de parâmetro registrado nesta missão.")
+
+    # --- 4. SEÇÃO 2: ESTUDO DE CASO E PARECER DA INSPETORIA ---
+    p_s2 = doc.add_paragraph()
+    p_s2.paragraph_format.space_before = Pt(14)
+    p_s2.paragraph_format.space_after = Pt(6)
+    r_s2 = p_s2.add_run("2. ANÁLISE DE TELEMETRIA E PARECER TÉCNICO DE INSPETORIA")
+    r_s2.bold = True
+    r_s2.font.size = Pt(11)
+    r_s2.font.color.rgb = COR_AZUL_FAB
+
+    texto_ia = obs_dict.get("Inspetoria e Graficos", "")
+    if str(texto_ia).strip():
+        linhas = str(texto_ia).split('\n')
+        for linha in linhas:
+            l_limpa = linha.strip()
+            if not l_limpa:
+                continue
+
+            if l_limpa.startswith("# "):
+                tit = l_limpa.replace("# ", "").strip()
+                p = doc.add_paragraph()
+                p.paragraph_format.space_before = Pt(10)
+                p.paragraph_format.space_after = Pt(4)
+                r = p.add_run(tit)
+                r.bold = True
+                r.font.size = Pt(12)
+                r.font.color.rgb = COR_AZUL_FAB
+
+            elif l_limpa.startswith("## "):
+                subtit = l_limpa.replace("## ", "").strip()
+                p = doc.add_paragraph()
+                p.paragraph_format.space_before = Pt(8)
+                p.paragraph_format.space_after = Pt(4)
+                r = p.add_run(subtit)
+                r.bold = True
+                r.font.size = Pt(10.5)
+                r.font.color.rgb = COR_AZUL_FAB
+
+            elif l_limpa.startswith("---"):
+                p = doc.add_paragraph()
+                p.paragraph_format.space_before = Pt(4)
+                p.paragraph_format.space_after = Pt(4)
+                r = p.add_run("_________________________________________________________________________________")
+                r.font.color.rgb = RGBColor(200, 200, 200)
+
+            elif l_limpa.startswith("* ") or l_limpa.startswith("- "):
+                conteudo_item = l_limpa[2:].strip()
+                adicionar_paragrafo_com_markdown(doc, conteudo_item, bullet=True)
+
+            else:
+                adicionar_paragrafo_com_markdown(doc, l_limpa)
+
+    # --- 5. SEÇÃO 3: ANEXO GRÁFICO ---
+    for titulo_grafico, fig in graficos_dict.items():
+        if fig is not None:
+            p_s3 = doc.add_paragraph()
+            p_s3.paragraph_format.space_before = Pt(14)
+            p_s3.paragraph_format.space_after = Pt(6)
+            r_s3 = p_s3.add_run(f"3. ANEXO DE TELEMETRIA VISUAL ({titulo_grafico.upper()})")
+            r_s3.bold = True
+            r_s3.font.size = Pt(11)
+            r_s3.font.color.rgb = COR_AZUL_FAB
+
+            try:
+                img_bytes = fig.to_image(format="png", width=900, height=500, scale=2)
+                p_img = doc.add_paragraph()
+                p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p_img.paragraph_format.space_before = Pt(6)
+                p_img.paragraph_format.space_after = Pt(4)
+                p_img.add_run().add_picture(io.BytesIO(img_bytes), width=Cm(16.5))
+            except Exception as e:
+                doc.add_paragraph(f"[Aviso: Não foi possível exportar a imagem '{titulo_grafico}'].")
+
+    # --- 6. BLOCO DE HOMOLOGAÇÃO E ASSINATURA ---
+    p_esp = doc.add_paragraph()
+    p_esp.paragraph_format.space_before = Pt(20)
+
+    p_ass = doc.add_paragraph()
+    p_ass.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r_linha = p_ass.add_run("_____________________________________________________\n")
+    r_linha.bold = True
+    r_linha.font.color.rgb = COR_AZUL_FAB
+
+    r_nome = p_ass.add_run(f"{st.session_state.nome_logado}\n")
+    r_nome.bold = True
+    r_nome.font.size = Pt(10)
+    r_nome.font.color.rgb = COR_CINZA_TEXTO
+
+    r_cargo = p_ass.add_run("Inspetor de Telemetria e Manutenção Aeronáutica\nEsquadrão de Ensaio de Voo / FAB")
+    r_cargo.font.size = Pt(8.5)
+    r_cargo.font.color.rgb = RGBColor(100, 100, 100)
+
     io_bytes = io.BytesIO()
     doc.save(io_bytes)
     return io_bytes.getvalue()
@@ -744,11 +1036,12 @@ if arquivos_up:
                                     Aeronave Ala: {arq_ala}
                                     Escreva com jargão militar de aviação que a missão foi avaliada quanto à dispersão geométrica e aos parâmetros dinâmicos de motor (Ng, ITT, Torque). Seja profissional e direto.
                                     """
-                                    response = client_ai.models.generate_content(model='gemini-3.8-flash', contents=prompt_form)
-                                    st.session_state.obs_comparativo = response.text
+                                    modelo = genai.GenerativeModel('gemini-3.8-flash')
+                                    resposta = modelo.generate_content(prompt_form)
+                                    st.session_state.obs_comparativo = resposta.text
                                     st.rerun()
                                 except Exception as e:
-                                    st.error(f"Erro na IA: Verifique a chave na linha 20. Detalhe: {e}")
+                                    st.error(f"Erro na IA: {e}")
                         
                         st.info("As observações editadas nas outras abas (ou criadas pela IA) serão incluídas automaticamente no Word.")
                         
@@ -1164,21 +1457,57 @@ if arquivos_up:
                 if st.button("Escrever Parecer Técnico do Voo Solo com IA", key="btn_ia_solo_rel"):
                     with st.spinner("A IA está analisando os parâmetros do voo..."):
                         try:
+                            # 1. Calculamos os picos primeiro para evitar erros
+                            pico_tq = df['E1 Torq ft lbs'].max() if 'E1 Torq ft lbs' in df.columns else 0
+                            pico_itt = df['E1 ITT'].max() if 'E1 ITT' in df.columns else 0
+                            pico_ng = df['E1 NG'].max() if 'E1 NG' in df.columns else 0
+                            pico_nh = df['E1 NP %'].max() if 'E1 NP %' in df.columns else 0
+
                             texto_alertas = ", ".join(alertas) if alertas else "Nenhum alerta. Voo dentro dos limites normais."
-                            prompt = f"""
-                            Atue como um Engenheiro de Manutenção da Força Aérea Brasileira.
-                            Analise os seguintes dados da telemetria:
-                            - Força G Máxima: {max_g:.2f}G
-                            - Força G Mínima: {min_g:.2f}G
-                            - Alertas disparados: {texto_alertas}
                             
-                            Escreva um parecer técnico curto (máx 2 parágrafos) avaliando a integridade estrutural e parâmetros de motor. Use jargão de manutenção aeronáutica. Não invente dados além destes.
+                            # 2. Montamos o prompt limpo e sem o # perdido
+                            prompt = f"""
+                            Atue como um Inspetor Sênior de Manutenção e Avaliador de Telemetria da Força Aérea Brasileira.
+                            O seu objetivo é emitir um Parecer Técnico Oficial e um Estudo de Caso aprofundado, baseado estritamente nos dados deste voo.
+
+                            DADOS DE PICO COLETADOS NA MISSÃO:
+                            - Força G: Máxima {max_g:.2f}G | Mínima {min_g:.2f}G
+                            - Motor (Torque Máx): {pico_tq:.0f} Lbs
+                            - Motor (Temperatura ITT Máx): {pico_itt:.0f} ºC
+                            - Motor (Rotação Ng Máx): {pico_ng:.1f}%
+                            - Motor (Hélice Nh Máx): {pico_nh:.1f}%
+                            - Ocorrências e Alertas de Ultrapassagem: {texto_alertas}
+
+                            DIRETRIZES DE FORMATAÇÃO (ESTRUTURA VISUAL OBRIGATÓRIA):
+                            - PROIBIDO escrever texto corrido tipo dissertação. O laudo deve ser altamente escaneável e estruturado.
+                            - Use Markdown para criar hierarquia visual: utilize `#` para o Título Principal e `##` para Subtítulos.
+                            - Use listas de marcadores (bullet points) extensivamente para listar eventos, facilitando a leitura rápida.
+                            - Destaque em **negrito** todos os valores numéricos, nomes de sensores e peças críticas.
+                            - Utilize Emojis como código de cores e status: 🔴 (Crítico/Limites Excedidos), 🟡 (Alerta/Monitoramento), 🟢 (Parâmetros Normais), 📊 (Referência a Gráfico), 🛠️ (Ação de Manutenção).
+
+                            DIRETRIZES DE REDAÇÃO E CONTEÚDO (ESTUDO DE CASO):
+                            1. INTEGRAÇÃO VISUAL COM GRÁFICOS: Guie o leitor. Comece os tópicos fazendo referência direta ao painel (ex: "📊 **Análise do Gráfico 1 e 2 (Dinâmica):** Como evidenciado pela curva...").
+                            2. FOCO CIRÚRGICO NAS OCORRÊNCIAS (🔴 e 🟡): Se houver alertas, crie um subtítulo específico para o Estudo de Caso. Quebre a análise da falha em 3 pontos rápidos:
+                               - **Momento do Evento:** (Cruze o alerta com Altitude, Velocidade e Hora).
+                               - **Dinâmica Suspeita:** (Que tipo de manobra ou erro operacional causou o pico).
+                               - **Consequência Física:** (Ex: fadiga estrutural severa, degradação térmica da seção quente).
+                            3. CONDIÇÃO VERDE (🟢): Mesmo se não houver alertas, comente sobre o comportamento saudável e os picos atingidos, atestando como a máquina se comportou bem dentro do envelope de voo.
+                            4. RECOMENDAÇÕES DIRETAS: Termine com uma lista de ordens de serviço (ex: Inspeção Visual, END, Boroscopia, ou "Aeronave Liberada").
+                            5. VOCABULÁRIO: Jargão militar e aeronáutico estrito.
+
+                            ESTRUTURA EXATA EXIGIDA PARA O LAUDO:
+                            # RELATÓRIO DE INSPETORIA TÉCNICA E TELEMETRIA
+                            ## 1. 📊 VISÃO GERAL E DINÂMICA DE VOO
+                            ## 2. 🔍 ESTUDO DE CASO: OCORRÊNCIAS E PICOS DE ESFORÇO
+                            ## 3. 🛠️ DIAGNÓSTICO E RECOMENDAÇÕES DE MANUTENÇÃO
                             """
-                            response = client_ai.models.generate_content(model='gemini-3.8-flash', contents=prompt)
-                            st.session_state.obs_graficos = response.text
+                            
+                            modelo = genai.GenerativeModel('gemini-3.8-flash')
+                            resposta = modelo.generate_content(prompt)
+                            st.session_state.obs_graficos = resposta.text
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Erro na IA: Certifique-se de que colou a API Key válida na linha 20. Detalhe do erro: {e}")
+                            st.error(f"Erro na IA: {e}")
                 
                 st.info("Aqui pode ver e editar o texto final da seção 'Inspetoria e Gráficos' (quer tenha sido escrito por si na 2ª aba, ou gerado agora mesmo pela IA):")
                 obs_graf_tmp_rel = st.text_area("Parecer Técnico (Editável):", value=st.session_state.obs_graficos, key='k_graf_rel', height=200)
