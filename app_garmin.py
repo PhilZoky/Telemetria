@@ -17,7 +17,7 @@ import google.generativeai as genai
 # CONFIGURAÇÃO DA INTELIGÊNCIA ARTIFICIAL
 # ==========================================
 # GERE A SUA CHAVE GRATUITA EM: aistudio.google.com
-genai.configure(api_key=st.secrets["AQ.Ab8RN6IfhtEtFAPPVwu0FQWg3D6m1QYRhSsYayYEd0807o0npg"])
+genai.configure(api_key=st.secrets["AIzaSyC-AQ.Ab8RN6IfhtEtFAPPVwu0FQWg3D6m1QYRhSsYayYEd0807o0npg"])
 
 
 # ==========================================
