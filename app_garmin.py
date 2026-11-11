@@ -1503,7 +1503,7 @@ if arquivos_up:
                             ## 3. 🛠️ DIAGNÓSTICO E RECOMENDAÇÕES DE MANUTENÇÃO
                             """
                             
-                            modelo = genai.GenerativeModel('gemini-1.5-flash')
+                            modelo = genai.GenerativeModel('gemini-1.5-flash-latest')
                             resposta = modelo.generate_content(prompt)
                             st.session_state.obs_graficos = resposta.text
                             st.rerun()
