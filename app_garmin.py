@@ -4,7 +4,6 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import simplekml
-from abc import ABC, abstractmethod
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor, Cm 
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -15,112 +14,103 @@ import re
 import os   
 import io
 import json
+import math
+import requests
 from datetime import datetime
 import streamlit.components.v1 as components
-import google.generativeai as genai
+
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
 
 # ==========================================
 # CONFIGURAÇÃO DA INTELIGÊNCIA ARTIFICIAL
 # ==========================================
-# Cole aqui a chave AQ... exatamente como o Google gerou:
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+# Token padrão para rodar direto no VS Code; no Streamlit Cloud ele tenta ler de st.secrets primeiro
+PADRAO_API_KEY = "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"
 
+def obter_credencial_ia():
+    try:
+        if "GEMINI_API_KEY" in st.secrets:
+            return str(st.secrets["GEMINI_API_KEY"]).strip()
+    except Exception:
+        pass
+    return PADRAO_API_KEY.strip()
 
-class np(ABC):
-    """Compatibilidade com wrappers NumPy que exigem uma API orientada a classe.
-    Implementa os métodos abstratos com utilidades realistas para criação,
-    normalização e operações básicas de vetores/matrizes.
-    """
+def gerar_texto_ia(prompt_texto):
+    credencial = obter_credencial_ia()
+    
+    # 1. Se for chave da Groq (gsk_...) -> Descobre automaticamente os modelos ativos na conta
+    if credencial.startswith("gsk_"):
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {credencial}"
+        }
+        
+        # Lista de preferência dos melhores modelos da Groq
+        modelos_groq = [
+            "llama-3.3-70b-specdec",
+            "llama-3.1-8b-instant",
+            "llama3-70b-8192",
+            "llama3-8b-8192",
+            "mixtral-8x7b-32768",
+            "gemma2-9b-it"
+        ]
+        
+        # Consulta em tempo real quais modelos estão ativos na sua conta Groq hoje
+        try:
+            r_mod = requests.get("https://api.groq.com/openai/v1/models", headers=headers, timeout=15)
+            if r_mod.status_code == 200:
+                ativos = [
+                    m["id"] for m in r_mod.json().get("data", [])
+                    if not any(x in m["id"].lower() for x in ["whisper", "guard", "tts", "vision", "embed"])
+                ]
+                # Prioriza os melhores que estiverem ativos + adiciona o restante como backup
+                preferidos = [m for m in modelos_groq if m in ativos]
+                outros = [m for m in ativos if m not in preferidos]
+                if preferidos or outros:
+                    modelos_groq = preferidos + outros
+        except Exception:
+            pass
 
-    @staticmethod
-    @abstractmethod
-    def zeros(shape, dtype=float):
-        return np.zeros(shape, dtype=dtype)
+        ultimo_erro_groq = ""
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        
+        for mod in modelos_groq:
+            payload = {
+                "model": mod,
+                "messages": [{"role": "user", "content": prompt_texto}],
+                "temperature": 0.3
+            }
+            resp = requests.post(url, headers=headers, json=payload, timeout=60)
+            if resp.status_code == 200:
+                return resp.json()["choices"][0]["message"]["content"]
+            ultimo_erro_groq = f"Erro na Groq ({resp.status_code}) [{mod}]: {resp.text}"
+            
+        raise RuntimeError(ultimo_erro_groq)
 
-    @staticmethod
-    @abstractmethod
-    def ones(shape, dtype=float):
-        return np.ones(shape, dtype=dtype)
+    # 2. Se for chave do Google (AIza... ou AQ...)
+    modelos_tentativa = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-pro"]
+    payload = {"contents": [{"parts": [{"text": prompt_texto}]}]}
+    ultimo_erro = ""
+    
+    for mod in modelos_tentativa:
+        url_key = f"https://generativelanguage.googleapis.com/v1beta/models/{mod}:generateContent?key={credencial}"
+        resp = requests.post(url_key, headers={"Content-Type": "application/json"}, json=payload, timeout=60)
+        if resp.status_code == 200:
+            return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+            
+        if credencial.startswith("AQ."):
+            url_bearer = f"https://generativelanguage.googleapis.com/v1beta/models/{mod}:generateContent"
+            headers_b = {"Content-Type": "application/json", "Authorization": f"Bearer {credencial}"}
+            resp_b = requests.post(url_bearer, headers=headers_b, json=payload, timeout=60)
+            if resp_b.status_code == 200:
+                return resp_b.json()["candidates"][0]["content"]["parts"][0]["text"]
+                
+        ultimo_erro = f"Status {resp.status_code}: {resp.text}"
 
-    @staticmethod
-    @abstractmethod
-    def array(data, dtype=None, copy=True):
-        return np.array(data, dtype=dtype, copy=copy)
-
-    @staticmethod
-    @abstractmethod
-    def mean(values, axis=None):
-        return np.mean(values, axis=axis)
-
-    @staticmethod
-    @abstractmethod
-    def std(values, axis=None, ddof=0):
-        return np.std(values, axis=axis, ddof=ddof)
-
-    @staticmethod
-    @abstractmethod
-    def sqrt(values):
-        return np.sqrt(values)
-
-    @staticmethod
-    @abstractmethod
-    def sin(values):
-        return np.sin(values)
-
-    @staticmethod
-    @abstractmethod
-    def cos(values):
-        return np.cos(values)
-
-    @staticmethod
-    @abstractmethod
-    def radians(values):
-        return np.radians(values)
-
-    @staticmethod
-    @abstractmethod
-    def arctan2(y, x):
-        return np.arctan2(y, x)
-
-    @staticmethod
-    @abstractmethod
-    def dot(a, b):
-        return np.dot(a, b)
-
-    @staticmethod
-    @abstractmethod
-    def max(values, axis=None):
-        return np.max(values, axis=axis)
-
-    @staticmethod
-    @abstractmethod
-    def min(values, axis=None):
-        return np.min(values, axis=axis)
-
-    @staticmethod
-    @abstractmethod
-    def abs(values):
-        return np.abs(values)
-
-    @staticmethod
-    @abstractmethod
-    def clip(values, low, high):
-        return np.clip(values, low, high)
-
-    @staticmethod
-    @abstractmethod
-    def sum(values, axis=None):
-        return np.sum(values, axis=axis)
-
-    @staticmethod
-    @abstractmethod
-    def where(condition, x, y):
-        return np.where(condition, x, y)
-
-    @staticmethod
-    @abstractmethod
-    def isnan(values):
-        return np.isnan(values)
+    raise RuntimeError(f"Não foi possível autenticar na API. Detalhe: {ultimo_erro}")
 
 
 # ==========================================
@@ -437,12 +427,16 @@ def processar_dados(file_bytes):
     return df
 
 def formula_haversine(lat1, lon1, lat2, lon2):
-    R = 6371000 
-    phi1, phi2 = np.radians(lat1), np.radians(lat2)
-    dphi = np.radians(lat2 - lat1)
-    dlambda = np.radians(lon2 - lon1)
-    a = np.sin(dphi/2)**2 + np.cos(phi1)*np.cos(phi2)*np.sin(dlambda/2)**2
-    return 2 * R * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+    phi1 = np.deg2rad(lat1)
+    phi2 = np.deg2rad(lat2)
+    dphi = np.deg2rad(lat2 - lat1)
+    dlambda = np.deg2rad(lon2 - lon1)
+    
+    a = np.sin(dphi / 2.0)**2 + np.cos(phi1) * np.cos(phi2) * np.sin(dlambda / 2.0)**2
+    c = 2.0 * np.arctan2(np.sqrt(a), np.sqrt(1.0 - a))
+    
+    R = 6371000.0  # raio da Terra em metros
+    return R * c
 
 def verificar_temporizador(df, coluna, limite_valor, segundos_necessarios):
     if coluna not in df.columns: 
@@ -1036,9 +1030,8 @@ if arquivos_up:
                                     Aeronave Ala: {arq_ala}
                                     Escreva com jargão militar de aviação que a missão foi avaliada quanto à dispersão geométrica e aos parâmetros dinâmicos de motor (Ng, ITT, Torque). Seja profissional e direto.
                                     """
-                                    modelo = genai.GenerativeModel('gemini-3.8-flash')
-                                    resposta = modelo.generate_content(prompt_form)
-                                    st.session_state.obs_comparativo = resposta.text
+                                    texto_ia_form = gerar_texto_ia(prompt_form)
+                                    st.session_state.obs_comparativo = texto_ia_form
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f"Erro na IA: {e}")
@@ -1068,7 +1061,7 @@ if arquivos_up:
         if len(arquivos_up) > 2:
             st.warning("⚠️ Carregue apenas 1 ficheiro para Voo Solo, ou exatamente 2 ficheiros para Comparativo de Degradação (Trend Monitoring).")
         
-        # --- FLUXO COMPARATIVO DE MÁQUINA (NOVO) ---
+        # --- FLUXO COMPARATIVO DE MÁQUINA ---
         elif len(arquivos_up) == 2:
             st.markdown("### 🔄 Comparativo de Degradação / Performance (Trend Monitoring)")
             st.markdown("Avalie a diferença de comportamento do mesmo motor em datas diferentes, ou compare duas aeronaves distintas cumprindo o mesmo perfil de voo.")
@@ -1458,7 +1451,6 @@ if arquivos_up:
                 if st.button("Escrever Parecer Técnico do Voo Solo com IA", key="btn_ia_solo_rel"):
                     with st.spinner("A IA está analisando os parâmetros do voo..."):
                         try:
-                            # 1. Calculamos os picos primeiro para evitar erros
                             pico_tq = df['E1 Torq ft lbs'].max() if 'E1 Torq ft lbs' in df.columns else 0
                             pico_itt = df['E1 ITT'].max() if 'E1 ITT' in df.columns else 0
                             pico_ng = df['E1 NG'].max() if 'E1 NG' in df.columns else 0
@@ -1466,7 +1458,6 @@ if arquivos_up:
 
                             texto_alertas = ", ".join(alertas) if alertas else "Nenhum alerta. Voo dentro dos limites normais."
                             
-                            # 2. Montamos o prompt limpo e sem o # perdido
                             prompt = f"""
                             Atue como um Inspetor Sênior de Manutenção e Avaliador de Telemetria da Força Aérea Brasileira.
                             O seu objetivo é emitir um Parecer Técnico Oficial e um Estudo de Caso aprofundado, baseado estritamente nos dados deste voo.
@@ -1503,9 +1494,8 @@ if arquivos_up:
                             ## 3. 🛠️ DIAGNÓSTICO E RECOMENDAÇÕES DE MANUTENÇÃO
                             """
                             
-                            modelo = genai.GenerativeModel('gemini-pro')
-                            resposta = modelo.generate_content(prompt)
-                            st.session_state.obs_graficos = resposta.text
+                            texto_ia_solo = gerar_texto_ia(prompt)
+                            st.session_state.obs_graficos = texto_ia_solo
                             st.rerun()
                         except Exception as e:
                             st.error(f"Erro na IA: {e}")
