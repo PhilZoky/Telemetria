@@ -23,7 +23,7 @@ import google.generativeai as genai
 # CONFIGURAÇÃO DA INTELIGÊNCIA ARTIFICIAL
 # ==========================================
 # Cole aqui a chave AQ... exatamente como o Google gerou:
-genai.configure(api_key="AQ.Ab8RN6KQs-tcdEeQU0ItRh6abT6XQpguwOshVluYPmsfLVPh2A")
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
 
 class np(ABC):
@@ -1503,7 +1503,7 @@ if arquivos_up:
                             ## 3. 🛠️ DIAGNÓSTICO E RECOMENDAÇÕES DE MANUTENÇÃO
                             """
                             
-                            modelo = genai.GenerativeModel('gemini-3.8-flash')
+                            modelo = genai.GenerativeModel('gemini-1.5-flash')
                             resposta = modelo.generate_content(prompt)
                             st.session_state.obs_graficos = resposta.text
                             st.rerun()
