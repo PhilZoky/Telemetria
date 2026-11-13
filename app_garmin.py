@@ -1095,10 +1095,10 @@ if arquivos_up:
             
             col_lider, col_ala, col_sync = st.columns([1.5, 1.5, 1])
             with col_lider:
-                arq_lider = st.selectbox("🟠 Aeronave LÍDER (Nº 1):", [nome_arq1, nome_arq2], index=0)
+                arq_lider = st.selectbox("🔵 Aeronave LÍDER (Nº 1):", [nome_arq1, nome_arq2], index=0)
             with col_ala:
                 idx_padrao_ala = 1 if arq_lider == nome_arq1 else 0
-                arq_ala = st.selectbox("🔵 Aeronave ALA (Nº 2):", [nome_arq1, nome_arq2], index=idx_padrao_ala)
+                arq_ala = st.selectbox("🟠 Aeronave ALA (Nº 2):", [nome_arq1, nome_arq2], index=idx_padrao_ala)
             with col_sync:
                 ajuste_horas = st.number_input("⏳ Offset Fuso Horário Ala (h):", min_value=-12, max_value=12, value=0, step=1, help="Use -3 ou +3 caso uma aeronave esteja em UTC e outra em Hora Local.")
                 
