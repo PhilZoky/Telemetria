@@ -12,4 +12,4 @@ jobs:
     steps:
       - name: Visitar o site para evitar hibernacao
         run: |
-          curl -L -s "https://https://telemetria-tofly.streamlit.app" > /dev/null
+          curl -L -s "https://telemetria-tofly.streamlit.app" > /dev/null
