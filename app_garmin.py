@@ -40,7 +40,7 @@ def injetar_estilo_profissional():
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap');
 
         html, body, [class*="css"] {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
         }
         .stApp {
             background: radial-gradient(circle at 50% 0%, #0f172a 0%, #070b14 100%);
@@ -161,7 +161,7 @@ injetar_estilo_profissional()
 # CONFIGURAÇÃO DA INTELIGÊNCIA ARTIFICIAL
 # ==========================================
 # Lembrete: No VS Code pode manter a chave gsk_... aqui. Ao subir para o GitHub, deixe PADRAO_API_KEY = ""
-PADRAO_API_KEY = "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"
+PADRAO_API_KEY = ""
 
 def obter_credencial_ia():
     try:
@@ -351,7 +351,7 @@ if st.session_state.usuario_logado is None:
 
 
 # ==========================================
-# 1. GERENCIADOR DE PERFIS INDIVIDUAIS DO CLIENTE (ATUALIZADO "BOA CEPA!" T-27M)
+# 1. GERENCIADOR DE PERFIS INDIVIDUAIS DO CLIENTE (PADRÃO OFICIAL T-27M AUTOMÁTICO)
 # ==========================================
 ARQUIVO_PERFIS = f"perfis_{st.session_state.usuario_logado}.json"
 
@@ -384,10 +384,12 @@ def carregar_perfis():
     if os.path.exists(ARQUIVO_PERFIS):
         try:
             with open(ARQUIVO_PERFIS, "r", encoding="utf-8") as f: 
-                return json.load(f)
+                dados = json.load(f)
+            dados["T-27M (Oficial)"] = PERFIS_PADRAO["T-27M (Oficial)"].copy()
+            return dados
         except: 
-            return PERFIS_PADRAO
-    return PERFIS_PADRAO
+            return PERFIS_PADRAO.copy()
+    return PERFIS_PADRAO.copy()
 
 def salvar_perfis(perfis):
     with open(ARQUIVO_PERFIS, "w", encoding="utf-8") as f: 
@@ -450,13 +452,6 @@ st.sidebar.markdown(f"""
     </div>
 </div>
 """, unsafe_allow_html=True)
-
-if projeto_atual == "T-27M (Oficial)":
-    if st.sidebar.button("🔄 Restaurar Padrão 'BOA CEPA!' T-27M", use_container_width=True):
-        perfis_salvos["T-27M (Oficial)"] = PERFIS_PADRAO["T-27M (Oficial)"].copy()
-        salvar_perfis(perfis_salvos)
-        st.sidebar.success("Limites oficiais do T-27M aplicados!")
-        st.rerun()
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("<div style='font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px;'>🕹️ MODO DE MISSÃO</div>", unsafe_allow_html=True)
@@ -550,14 +545,14 @@ st.markdown(f"""
     <div>
         <div style="display: flex; align-items: center; gap: 10px;">
             <span style="background: #1d4ed8; color: #fff; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 4px; letter-spacing: 1px;">GARMIN G1000 / G3000</span>
-            <span style="color: #64748b; font-size: 12px; font-family: 'JetBrains Mono', monospace;">FDM ENGINE v3.6 • BOA CEPA EDITION</span>
+            <span style="color: #64748b; font-size: 12px; font-family: 'JetBrains Mono', Consolas, monospace;">FDM ENGINE v3.7 • TACTICAL EDITION</span>
         </div>
         <h1 style="margin: 6px 0 0 0; font-size: 26px; color: #f8fafc;">Centro de Telemetria e Inspetoria de Voo</h1>
     </div>
     <div style="display: flex; gap: 12px; align-items: center;">
         <div style="background: #090d16; border: 1px solid #1e293b; border-radius: 8px; padding: 8px 16px; text-align: right;">
             <div style="font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px;">Aeronave Ativa</div>
-            <div style="font-size: 15px; font-weight: 700; color: #38bdf8; font-family: 'JetBrains Mono', monospace;">{projeto_atual}</div>
+            <div style="font-size: 15px; font-weight: 700; color: #38bdf8; font-family: 'JetBrains Mono', Consolas, monospace;">{projeto_atual}</div>
         </div>
         <div style="background: #090d16; border: 1px solid #1e293b; border-radius: 8px; padding: 8px 16px; text-align: right;">
             <div style="font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px;">Modo Operacional</div>
@@ -677,7 +672,7 @@ def exibir_card_arcos(titulo, pico, red_line, yellow_line, min_green, unidade, f
             <span style="font-size: 10px; color: {cor}; background: {bg_badge}; border: 1px solid {cor}44; padding: 2px 8px; border-radius: 12px; font-weight: 700; letter-spacing: 0.5px;">{status}</span>
         </div>
         <div style="display: flex; align-items: baseline; gap: 6px; margin-bottom: 12px;">
-            <span style="color: #f8fafc; font-size: 30px; font-weight: 700; font-family: 'JetBrains Mono', monospace; letter-spacing: -0.5px;">{pico_str}</span>
+            <span style="color: #f8fafc; font-size: 30px; font-weight: 700; font-family: 'JetBrains Mono', Consolas, monospace; letter-spacing: -0.5px;">{pico_str}</span>
             <span style="color: #64748b; font-size: 13px; font-weight: 600;">{unidade}</span>
         </div>
         <div style="width: 100%; background: #1e293b; height: 5px; border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
@@ -685,7 +680,7 @@ def exibir_card_arcos(titulo, pico, red_line, yellow_line, min_green, unidade, f
         </div>
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <span style="font-size: 11px; color: #64748b;">Red Line Limit</span>
-            <span style="font-size: 11.5px; color: #cbd5e1; font-family: 'JetBrains Mono', monospace; font-weight: 600;">{limite_str} {unidade}</span>
+            <span style="font-size: 11.5px; color: #cbd5e1; font-family: 'JetBrains Mono', Consolas, monospace; font-weight: 600;">{limite_str} {unidade}</span>
         </div>
     </div>
     """
@@ -699,7 +694,7 @@ def render_html_table(df_formatted, height=420):
     <head>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
     <style>
-    body {{ background-color: transparent; color: #f8fafc; font-family: 'Inter', sans-serif; margin: 0; }}
+    body {{ background-color: transparent; color: #f8fafc; font-family: 'Inter', 'Segoe UI', sans-serif; margin: 0; }}
     .tabela-container {{ max-height: {height - 20}px; overflow-y: auto; overflow-x: auto; border: 1px solid #1e293b; border-radius: 10px; background: #090d16; box-shadow: inset 0 2px 8px rgba(0,0,0,0.4); }}
     .tabela-container::-webkit-scrollbar {{ width: 8px; height: 8px; }}
     .tabela-container::-webkit-scrollbar-track {{ background: #090d16; }}
@@ -707,7 +702,7 @@ def render_html_table(df_formatted, height=420):
     .tabela-container::-webkit-scrollbar-thumb:hover {{ background: #3b82f6; }}
     .tabela-grande {{ width: 100%; font-size: 13.5px; text-align: center; border-collapse: collapse; white-space: nowrap; }}
     .tabela-grande th {{ background: #0f172a; color: #94a3b8; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; padding: 13px 14px; position: sticky; top: 0; z-index: 1; border-bottom: 2px solid #1e293b; }}
-    .tabela-grande td {{ padding: 10px 14px; border-bottom: 1px solid #131c2e; font-family: 'JetBrains Mono', monospace; color: #e2e8f0; }}
+    .tabela-grande td {{ padding: 10px 14px; border-bottom: 1px solid #131c2e; font-family: 'JetBrains Mono', Consolas, monospace; color: #e2e8f0; }}
     .tabela-grande tr:nth-child(even) {{ background-color: rgba(15, 23, 42, 0.4); }}
     .tabela-grande tr:hover {{ background-color: rgba(59, 130, 246, 0.12); }}
     </style>
@@ -1358,7 +1353,7 @@ if arquivos_up:
                     )
 
 
-        # --- FLUXO VOO SOLO ORIGINAL (COM REGRAS OFICIAIS "BOA CEPA!" T-27M) ---
+        # --- FLUXO VOO SOLO ORIGINAL (COM REGRAS OFICIAIS DO MANUAL T-27M) ---
         else:
             df = processar_dados(arquivos_up[0].getvalue())
             
@@ -1394,7 +1389,7 @@ if arquivos_up:
                     em_invertido = df['NormAc'] < -0.15
                     seg_invertido = int(em_invertido.groupby((~em_invertido).cumsum()).sum().max()) if not em_invertido.empty else 0
                     if seg_invertido > 15:
-                        add_alerta_contexto('NormAc', min_g, f"🔴 EXCEDÊNCIA VOO INVERTIDO (INSTRUÇÃO): {seg_invertido}s contínuos (Limite BOA CEPA: 15s)")
+                        add_alerta_contexto('NormAc', min_g, f"🔴 EXCEDÊNCIA VOO INVERTIDO (INSTRUÇÃO): {seg_invertido}s contínuos (Limite Manual: 15s)")
 
                 # 2. TORQUE (Máx Decolagem: 1795 lb.ft)
                 if verificar_temporizador(df, 'E1 Torq ft lbs', 2100, 2):
@@ -1493,23 +1488,23 @@ if arquivos_up:
                 <div style="display: flex; gap: 28px; flex-wrap: wrap;">
                     <div>
                         <div style="font-size: 10px; color: #64748b; text-transform: uppercase;">Acionamento (Start)</div>
-                        <div style="font-size: 15px; font-weight: 700; color: #f8fafc; font-family: 'JetBrains Mono', monospace;">{tempos['acionamento']}</div>
+                        <div style="font-size: 15px; font-weight: 700; color: #f8fafc; font-family: 'JetBrains Mono', Consolas, monospace;">{tempos['acionamento']}</div>
                     </div>
                     <div>
                         <div style="font-size: 10px; color: #64748b; text-transform: uppercase;">Decolagem (T/O)</div>
-                        <div style="font-size: 15px; font-weight: 700; color: #38bdf8; font-family: 'JetBrains Mono', monospace;">{tempos['decolagem']}</div>
+                        <div style="font-size: 15px; font-weight: 700; color: #38bdf8; font-family: 'JetBrains Mono', Consolas, monospace;">{tempos['decolagem']}</div>
                     </div>
                     <div>
                         <div style="font-size: 10px; color: #64748b; text-transform: uppercase;">Pouso (LDG)</div>
-                        <div style="font-size: 15px; font-weight: 700; color: #38bdf8; font-family: 'JetBrains Mono', monospace;">{tempos['pouso']}</div>
+                        <div style="font-size: 15px; font-weight: 700; color: #38bdf8; font-family: 'JetBrains Mono', Consolas, monospace;">{tempos['pouso']}</div>
                     </div>
                     <div>
                         <div style="font-size: 10px; color: #64748b; text-transform: uppercase;">Corte (Shutdown)</div>
-                        <div style="font-size: 15px; font-weight: 700; color: #f8fafc; font-family: 'JetBrains Mono', monospace;">{tempos['corte']}</div>
+                        <div style="font-size: 15px; font-weight: 700; color: #f8fafc; font-family: 'JetBrains Mono', Consolas, monospace;">{tempos['corte']}</div>
                     </div>
                     <div>
                         <div style="font-size: 10px; color: #64748b; text-transform: uppercase;">Tempo de Voo</div>
-                        <div style="font-size: 15px; font-weight: 700; color: #10b981; font-family: 'JetBrains Mono', monospace;">{tempos['t_voo']}</div>
+                        <div style="font-size: 15px; font-weight: 700; color: #10b981; font-family: 'JetBrains Mono', Consolas, monospace;">{tempos['t_voo']}</div>
                     </div>
                 </div>
                 <div style="background: {cor_status_missao}22; border: 1px solid {cor_status_missao}66; color: {cor_status_missao}; padding: 6px 14px; border-radius: 20px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.6px;">
@@ -1550,7 +1545,7 @@ if arquivos_up:
                     exibir_card_arcos("Pressão do Óleo (OilP)", max_oilp, l_oilp_red, None, l_oilp_min, "PSI", ":.0f")
 
                 if projeto_atual == "T-27M (Oficial)":
-                    with st.expander("📋 Consultar Gabarito Oficial de Limites Operacionais T-27M ('BOA CEPA!')"):
+                    with st.expander("📋 Consultar Gabarito Oficial de Limites Operacionais T-27M"):
                         st.markdown("""
                         | Parâmetro Operacional | Limite Oficial T-27M | Parâmetro Operacional | Limite Oficial T-27M |
                         | :--- | :--- | :--- | :--- |
