@@ -384,13 +384,10 @@ def carregar_perfis():
     if os.path.exists(ARQUIVO_PERFIS):
         try:
             with open(ARQUIVO_PERFIS, "r", encoding="utf-8") as f: 
-                dados = json.load(f)
-            # Garante que o perfil T-27M (Oficial) tenha sempre os parâmetros fieis ao manual como padrão
-            dados["T-27M (Oficial)"] = PERFIS_PADRAO["T-27M (Oficial)"].copy()
-            return dados
+                return json.load(f)
         except: 
-            return PERFIS_PADRAO.copy()
-    return PERFIS_PADRAO.copy()
+            return PERFIS_PADRAO
+    return PERFIS_PADRAO
 
 def salvar_perfis(perfis):
     with open(ARQUIVO_PERFIS, "w", encoding="utf-8") as f: 
@@ -454,6 +451,12 @@ st.sidebar.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+if projeto_atual == "T-27M (Oficial)":
+    if st.sidebar.button("🔄 Restaurar Padrão 'BOA CEPA!' T-27M", use_container_width=True):
+        perfis_salvos["T-27M (Oficial)"] = PERFIS_PADRAO["T-27M (Oficial)"].copy()
+        salvar_perfis(perfis_salvos)
+        st.sidebar.success("Limites oficiais do T-27M aplicados!")
+        st.rerun()
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("<div style='font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px;'>🕹️ MODO DE MISSÃO</div>", unsafe_allow_html=True)
