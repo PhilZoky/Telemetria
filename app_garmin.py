@@ -25,7 +25,7 @@ except ImportError:
     genai = None
 
 # ==========================================
-# CONFIGURAÇÃO DA PÁGINA E ESTILO AEROESPACIAL (UI/UX PRO)
+# CONFIGURAÇÃO DA PÁGINA E GERENCIADOR DE TEMA (LIGHT / DARK)
 # ==========================================
 st.set_page_config(
     page_title="AeroTelemetry | Flight Data Monitoring",
@@ -34,134 +34,215 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-def injetar_estilo_profissional():
-    st.markdown("""
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap');
+if "tema_ui" not in st.session_state:
+    st.session_state.tema_ui = "☀️ Claro (Padrão Diurno)"
 
-        html, body, [class*="css"] {
+def obter_paleta_cores():
+    modo_claro = "Claro" in st.session_state.tema_ui
+    if modo_claro:
+        return {
+            "modo": "light",
+            "bg_app": "linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%)",
+            "bg_sidebar": "#ffffff",
+            "bg_card": "#ffffff",
+            "bg_card_grad": "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+            "bg_header": "linear-gradient(90deg, #1e3a8a 0%, #1d4ed8 50%, #1e3a8a 100%)",
+            "txt_header": "#ffffff",
+            "sub_header": "#bfdbfe",
+            "bg_badge_header": "rgba(255, 255, 255, 0.15)",
+            "bg_input": "#ffffff",
+            "txt_main": "#0f172a",
+            "txt_sec": "#475569",
+            "txt_muted": "#64748b",
+            "border": "#cbd5e1",
+            "accent": "#1d4ed8",
+            "accent_light": "#2563eb",
+            "plotly_template": "plotly_white",
+            "plotly_bg": "#ffffff",
+            "map_style": "carto-positron",
+            "tab_bg": "#e2e8f0",
+            "tab_txt": "#334155"
+        }
+    else:
+        return {
+            "modo": "dark",
+            "bg_app": "radial-gradient(circle at 50% 0%, #0f172a 0%, #070b14 100%)",
+            "bg_sidebar": "#090d16",
+            "bg_card": "#090d16",
+            "bg_card_grad": "linear-gradient(160deg, #0f172a 0%, #090d16 100%)",
+            "bg_header": "linear-gradient(90deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)",
+            "txt_header": "#f8fafc",
+            "sub_header": "#94a3b8",
+            "bg_badge_header": "#090d16",
+            "bg_input": "#0f172a",
+            "txt_main": "#f8fafc",
+            "txt_sec": "#cbd5e1",
+            "txt_muted": "#94a3b8",
+            "border": "#1e293b",
+            "accent": "#3b82f6",
+            "accent_light": "#38bdf8",
+            "plotly_template": "plotly_dark",
+            "plotly_bg": "#090d16",
+            "map_style": "carto-darkmatter",
+            "tab_bg": "#0f172a",
+            "tab_txt": "#94a3b8"
+        }
+
+T = obter_paleta_cores()
+
+def injetar_estilo_profissional(t):
+    st.markdown(f"""
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap');
+
+        html, body, [class*="css"] {{
             font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-        }
-        .stApp {
-            background: radial-gradient(circle at 50% 0%, #0f172a 0%, #070b14 100%);
-            color: #f8fafc;
-        }
-        .block-container {
-            padding-top: 2rem !important;
+            color: {t['txt_main']};
+        }}
+        .stApp {{
+            background: {t['bg_app']} !important;
+            color: {t['txt_main']} !important;
+        }}
+        .block-container {{
+            padding-top: 1.8rem !important;
             padding-bottom: 3rem !important;
             max-width: 96% !important;
-        }
+        }}
 
-        [data-testid="stSidebar"] {
-            background-color: #090d16 !important;
-            border-right: 1px solid #1e293b !important;
-        }
-        [data-testid="stSidebar"] .block-container {
-            padding-top: 1.5rem !important;
-        }
+        /* Barra Lateral */
+        [data-testid="stSidebar"] {{
+            background-color: {t['bg_sidebar']} !important;
+            border-right: 1px solid {t['border']} !important;
+        }}
+        [data-testid="stSidebar"] * {{
+            color: {t['txt_main']} !important;
+        }}
+        [data-testid="stSidebar"] .stCaption {{
+            color: {t['txt_sec']} !important;
+        }}
 
-        .stTabs [data-baseweb="tab-list"] {
+        /* Labels gerais para máxima leitura em monitores de serviço */
+        label, .stMarkdown p, .stRadio label, [data-testid="stWidgetLabel"] p {{
+            color: {t['txt_main']} !important;
+            font-weight: 600 !important;
+        }}
+
+        /* Abas estilo MFD */
+        .stTabs [data-baseweb="tab-list"] {{
             gap: 8px;
-            background-color: #0f172a;
+            background-color: {t['tab_bg']};
             padding: 6px;
             border-radius: 10px;
-            border: 1px solid #1e293b;
-        }
-        .stTabs [data-baseweb="tab"] {
+            border: 1px solid {t['border']};
+        }}
+        .stTabs [data-baseweb="tab"] {{
             height: 44px;
             border-radius: 7px;
             padding: 0 20px;
             background-color: transparent;
-            color: #94a3b8;
-            font-weight: 600;
+            color: {t['tab_txt']} !important;
+            font-weight: 700;
             font-size: 13px;
             letter-spacing: 0.4px;
             border: none !important;
             transition: all 0.2s ease;
-        }
-        .stTabs [data-baseweb="tab"]:hover {
-            color: #f8fafc;
-            background-color: rgba(255, 255, 255, 0.04);
-        }
-        .stTabs [aria-selected="true"] {
+        }}
+        .stTabs [aria-selected="true"] {{
             background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
             color: #ffffff !important;
-            box-shadow: 0 4px 12px rgba(29, 78, 216, 0.35);
-        }
+            box-shadow: 0 4px 10px rgba(29, 78, 216, 0.3);
+        }}
+        .stTabs [aria-selected="true"] * {{
+            color: #ffffff !important;
+        }}
 
-        .stButton > button, .stDownloadButton > button {
-            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-            color: #f8fafc;
-            border: 1px solid #334155;
+        /* Botões Principais */
+        .stButton > button, .stDownloadButton > button {{
+            background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
+            color: #ffffff !important;
+            border: 1px solid #1e3a8a !important;
             border-radius: 8px;
             padding: 0.55rem 1.2rem;
             font-weight: 600;
             font-size: 13.5px;
             letter-spacing: 0.3px;
             transition: all 0.2s ease;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
-        }
-        .stButton > button:hover, .stDownloadButton > button:hover {
-            border-color: #3b82f6;
-            background: linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%);
-            color: #ffffff;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+        }}
+        .stButton > button *, .stDownloadButton > button * {{
+            color: #ffffff !important;
+        }}
+        .stButton > button:hover, .stDownloadButton > button:hover {{
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
             transform: translateY(-1px);
-            box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35);
-        }
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+        }}
 
-        [data-testid="stFileUploader"] {
-            background-color: rgba(15, 23, 42, 0.65);
-            border: 1px dashed #334155;
+        /* File Uploader corrigido para não estourar branco no modo Dark nem sumir no Light */
+        [data-testid="stFileUploader"] {{
+            background-color: {t['bg_card']} !important;
+            border: 2px dashed {t['accent']} !important;
             border-radius: 12px;
-            padding: 14px;
-            transition: border 0.2s ease;
-        }
-        [data-testid="stFileUploader"]:hover {
-            border-color: #3b82f6;
-        }
+            padding: 16px;
+        }}
+        [data-testid="stFileUploader"] section {{
+            background-color: {t['bg_input']} !important;
+            color: {t['txt_main']} !important;
+            border: 1px solid {t['border']} !important;
+            border-radius: 8px;
+        }}
+        [data-testid="stFileUploader"] section * {{
+            color: {t['txt_main']} !important;
+        }}
+        [data-testid="stFileUploader"] button {{
+            background-color: {t['accent']} !important;
+            color: #ffffff !important;
+            border: none !important;
+        }}
+        [data-testid="stFileUploader"] button * {{
+            color: #ffffff !important;
+        }}
 
+        /* Inputs, TextAreas e Selectboxes */
         .stTextInput > div > div > input,
         .stNumberInput > div > div > input,
         .stTextArea > div > div > textarea,
-        .stSelectbox > div > div {
-            background-color: #0f172a !important;
-            border: 1px solid #1e293b !important;
-            color: #f8fafc !important;
+        .stSelectbox > div > div {{
+            background-color: {t['bg_input']} !important;
+            border: 1px solid {t['border']} !important;
+            color: {t['txt_main']} !important;
             border-radius: 8px !important;
-        }
-        .stTextInput > div > div > input:focus,
-        .stTextArea > div > div > textarea:focus {
-            border-color: #3b82f6 !important;
-            box-shadow: 0 0 0 1px #3b82f6 !important;
-        }
+            font-weight: 500 !important;
+        }}
 
-        .streamlit-expanderHeader {
-            background-color: #0f172a !important;
-            border: 1px solid #1e293b !important;
+        /* Expanders */
+        .streamlit-expanderHeader {{
+            background-color: {t['bg_card']} !important;
+            border: 1px solid {t['border']} !important;
+            color: {t['txt_main']} !important;
             border-radius: 8px !important;
-            font-size: 13px !important;
-            font-weight: 600 !important;
-        }
+            font-size: 13.5px !important;
+            font-weight: 700 !important;
+        }}
 
-        h1, h2, h3 {
+        h1, h2, h3, h4 {{
+            color: {t['txt_main']} !important;
             letter-spacing: -0.3px;
             font-weight: 700 !important;
-        }
-        hr {
-            border-color: #1e293b !important;
-            margin: 1.8rem 0 !important;
-        }
+        }}
+        hr {{
+            border-color: {t['border']} !important;
+            margin: 1.6rem 0 !important;
+        }}
     </style>
     """, unsafe_allow_html=True)
 
-injetar_estilo_profissional()
+injetar_estilo_profissional(T)
 
 
 # ==========================================
 # CONFIGURAÇÃO DA INTELIGÊNCIA ARTIFICIAL
 # ==========================================
-# IMPORTANTE: Mantenha vazio ("") se for subir para o GitHub para o GitHub não revogar a sua chave!
-# Configure nos Secrets do Streamlit Cloud ou cole na barra lateral.
 PADRAO_API_KEY = ""
 
 def obter_credencial_ia():
@@ -306,17 +387,25 @@ if "nome_logado" not in st.session_state:
     st.session_state.nome_logado = None
 
 if st.session_state.usuario_logado is None:
-    st.markdown("<br>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1.2, 1.8, 1.2])
-    
-    with col2:
-        st.markdown("""
-        <div style="background: linear-gradient(180deg, #0f172a 0%, #090d16 100%); border: 1px solid #1e293b; border-top: 3px solid #3b82f6; border-radius: 14px; padding: 28px 32px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); text-align: center; margin-bottom: 18px;">
-            <div style="display: inline-block; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.3); color: #60a5fa; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; padding: 4px 12px; border-radius: 20px; margin-bottom: 12px;">
+    col_t1, col_t2, col_t3 = st.columns([1.2, 1.8, 1.2])
+    with col_t2:
+        escolha_tema_login = st.radio(
+            "🌓 Modo de Exibição do Ecrã:",
+            ["☀️ Claro (Padrão Diurno)", "🌙 Escuro (Noturno)"],
+            index=0 if "Claro" in st.session_state.tema_ui else 1,
+            horizontal=True
+        )
+        if escolha_tema_login != st.session_state.tema_ui:
+            st.session_state.tema_ui = escolha_tema_login
+            st.rerun()
+
+        st.markdown(f"""
+        <div style="background: {T['bg_card_grad']}; border: 1px solid {T['border']}; border-top: 4px solid {T['accent']}; border-radius: 14px; padding: 28px 32px; box-shadow: 0 12px 30px rgba(0,0,0,0.12); text-align: center; margin-bottom: 18px; margin-top: 8px;">
+            <div style="display: inline-block; background: rgba(37, 99, 235, 0.12); border: 1px solid rgba(37, 99, 235, 0.3); color: {T['accent']}; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; padding: 4px 12px; border-radius: 20px; margin-bottom: 12px;">
                 FLIGHT DATA MONITORING SYSTEM
             </div>
-            <h2 style="margin: 0; color: #f8fafc; font-size: 26px; font-weight: 700;">✈️ AeroTelemetry Tactical</h2>
-            <p style="margin: 6px 0 0 0; color: #94a3b8; font-size: 13.5px;">Plataforma Integrada de Análise de Voo, Motores e Inspetoria Técnica</p>
+            <h2 style="margin: 0; color: {T['txt_main']}; font-size: 26px; font-weight: 700;">✈️ AeroTelemetry Tactical</h2>
+            <p style="margin: 6px 0 0 0; color: {T['txt_sec']}; font-size: 13.5px;">Plataforma Integrada de Análise de Voo, Motores e Inspetoria Técnica</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -414,7 +503,6 @@ def carregar_perfis():
         try:
             with open(ARQUIVO_PERFIS, "r", encoding="utf-8") as f: 
                 dados = json.load(f)
-            # Força o perfil oficial do T-27M a usar sempre os limites fiéis ao manual
             dados["T-27M (Oficial)"] = PERFIS_PADRAO["T-27M (Oficial)"].copy()
             return dados
         except: 
@@ -446,13 +534,22 @@ for k in obs_keys:
 
 
 # ==========================================
-# 3. BARRA LATERAL (PAINEL DE COMANDO TÁTICO)
+# 3. BARRA LATERAL (PAINEL DE COMANDO TÁTICO + SELETOR LIGHT/DARK)
 # ==========================================
+escolha_tema = st.sidebar.radio(
+    "🌓 Tema Visual do Painel:",
+    ["☀️ Claro (Padrão Diurno)", "🌙 Escuro (Noturno)"],
+    index=0 if "Claro" in st.session_state.tema_ui else 1
+)
+if escolha_tema != st.session_state.tema_ui:
+    st.session_state.tema_ui = escolha_tema
+    st.rerun()
+
 st.sidebar.markdown(f"""
-<div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid #334155; border-left: 4px solid #3b82f6; border-radius: 10px; padding: 14px 16px; margin-bottom: 12px;">
-    <div style="font-size: 10px; font-weight: 700; color: #60a5fa; letter-spacing: 1.2px; text-transform: uppercase;">INSPETOR CONECTADO</div>
-    <div style="font-size: 15px; font-weight: 700; color: #f8fafc; margin-top: 3px;">👨‍✈️ {st.session_state.nome_logado}</div>
-    <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">Status: <span style="color: #10b981; font-weight: 600;">● Online / Operacional</span></div>
+<div style="background: {T['bg_card_grad']}; border: 1px solid {T['border']}; border-left: 4px solid {T['accent']}; border-radius: 10px; padding: 14px 16px; margin-top: 8px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
+    <div style="font-size: 10px; font-weight: 700; color: {T['accent']}; letter-spacing: 1.2px; text-transform: uppercase;">INSPETOR CONECTADO</div>
+    <div style="font-size: 15px; font-weight: 700; color: {T['txt_main']}; margin-top: 3px;">👨‍✈️ {st.session_state.nome_logado}</div>
+    <div style="font-size: 11px; color: {T['txt_sec']}; margin-top: 2px;">Status: <span style="color: #10b981; font-weight: 700;">● Online / Operacional</span></div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -462,7 +559,7 @@ if st.sidebar.button("🚪 Encerrar Sessão (Logout)", use_container_width=True)
     st.rerun()
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("<div style='font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px;'>✈️ CONFIGURAÇÃO DA AERONAVE</div>", unsafe_allow_html=True)
+st.sidebar.markdown(f"<div style='font-size: 11px; font-weight: 700; color: {T['txt_sec']}; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px;'>✈️ CONFIGURAÇÃO DA AERONAVE</div>", unsafe_allow_html=True)
 
 projeto_atual = st.sidebar.selectbox("Perfil de Envelope:", list(perfis_salvos.keys()))
 p_dados = perfis_salvos[projeto_atual]
@@ -472,19 +569,19 @@ qtd_motores_config = int(p_dados.get("qtd_motores", 1))
 
 st.sidebar.markdown(f"""
 <div style="display: flex; gap: 8px; margin-top: 6px; margin-bottom: 10px;">
-    <div style="flex: 1; background: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 8px 10px; text-align: center;">
-        <div style="font-size: 10px; color: #64748b; text-transform: uppercase;">Categoria</div>
-        <div style="font-size: 13px; font-weight: 700; color: #e2e8f0; margin-top: 2px;">{tipo_projeto}</div>
+    <div style="flex: 1; background: {T['bg_card']}; border: 1px solid {T['border']}; border-radius: 8px; padding: 8px 10px; text-align: center;">
+        <div style="font-size: 10px; color: {T['txt_sec']}; font-weight: 600; text-transform: uppercase;">Categoria</div>
+        <div style="font-size: 13px; font-weight: 700; color: {T['txt_main']}; margin-top: 2px;">{tipo_projeto}</div>
     </div>
-    <div style="flex: 1; background: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 8px 10px; text-align: center;">
-        <div style="font-size: 10px; color: #64748b; text-transform: uppercase;">Propulsão</div>
-        <div style="font-size: 13px; font-weight: 700; color: #38bdf8; margin-top: 2px;">{qtd_motores_config} Motor(es)</div>
+    <div style="flex: 1; background: {T['bg_card']}; border: 1px solid {T['border']}; border-radius: 8px; padding: 8px 10px; text-align: center;">
+        <div style="font-size: 10px; color: {T['txt_sec']}; font-weight: 600; text-transform: uppercase;">Propulsão</div>
+        <div style="font-size: 13px; font-weight: 700; color: {T['accent']}; margin-top: 2px;">{qtd_motores_config} Motor(es)</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("<div style='font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px;'>🕹️ MODO DE MISSÃO</div>", unsafe_allow_html=True)
+st.sidebar.markdown(f"<div style='font-size: 11px; font-weight: 700; color: {T['txt_sec']}; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px;'>🕹️ MODO DE MISSÃO</div>", unsafe_allow_html=True)
 modo_analise = st.sidebar.radio(
     "Selecione o perfil de análise:", 
     ["Voo Solo / Comparativo de Máquina", "Voo em Formatura (Líder e Ala)"],
@@ -575,22 +672,22 @@ with st.sidebar.expander("🔑 Chave de IA (Opcional)", expanded=False):
 # 4. CABEÇALHO EXECUTIVO E FUNÇÕES MATEMÁTICAS
 # ==========================================
 st.markdown(f"""
-<div style="background: linear-gradient(90deg, #0f172a 0%, #1e293b 50%, #0f172a 100%); border: 1px solid #1e293b; border-bottom: 2px solid #3b82f6; border-radius: 12px; padding: 18px 24px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+<div style="background: {T['bg_header']}; border: 1px solid {T['border']}; border-bottom: 3px solid #3b82f6; border-radius: 12px; padding: 18px 24px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
     <div>
         <div style="display: flex; align-items: center; gap: 10px;">
-            <span style="background: #1d4ed8; color: #fff; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 4px; letter-spacing: 1px;">GARMIN G1000 / G3000</span>
-            <span style="color: #64748b; font-size: 12px; font-family: 'JetBrains Mono', Consolas, monospace;">FDM ENGINE v3.8 • TACTICAL EDITION</span>
+            <span style="background: #2563eb; color: #fff; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 4px; letter-spacing: 1px;">GARMIN G1000 / G3000</span>
+            <span style="color: {T['sub_header']}; font-size: 12px; font-family: 'JetBrains Mono', Consolas, monospace;">FDM ENGINE v3.9 • TACTICAL EDITION</span>
         </div>
-        <h1 style="margin: 6px 0 0 0; font-size: 26px; color: #f8fafc;">Centro de Telemetria e Inspetoria de Voo</h1>
+        <h1 style="margin: 6px 0 0 0; font-size: 26px; color: {T['txt_header']} !important;">Centro de Telemetria e Inspetoria de Voo</h1>
     </div>
     <div style="display: flex; gap: 12px; align-items: center;">
-        <div style="background: #090d16; border: 1px solid #1e293b; border-radius: 8px; padding: 8px 16px; text-align: right;">
-            <div style="font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px;">Aeronave Ativa</div>
-            <div style="font-size: 15px; font-weight: 700; color: #38bdf8; font-family: 'JetBrains Mono', Consolas, monospace;">{projeto_atual}</div>
+        <div style="background: {T['bg_badge_header']}; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 16px; text-align: right;">
+            <div style="font-size: 10px; color: {T['sub_header']}; text-transform: uppercase; letter-spacing: 0.8px;">Aeronave Ativa</div>
+            <div style="font-size: 15px; font-weight: 700; color: #ffffff; font-family: 'JetBrains Mono', Consolas, monospace;">{projeto_atual}</div>
         </div>
-        <div style="background: #090d16; border: 1px solid #1e293b; border-radius: 8px; padding: 8px 16px; text-align: right;">
-            <div style="font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px;">Modo Operacional</div>
-            <div style="font-size: 14px; font-weight: 600; color: #e2e8f0;">{"Formatura Tática" if "Formatura" in modo_analise else "Solo / Trend Monitoring"}</div>
+        <div style="background: {T['bg_badge_header']}; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 16px; text-align: right;">
+            <div style="font-size: 10px; color: {T['sub_header']}; text-transform: uppercase; letter-spacing: 0.8px;">Modo Operacional</div>
+            <div style="font-size: 14px; font-weight: 600; color: #ffffff;">{"Formatura Tática" if "Formatura" in modo_analise else "Solo / Trend Monitoring"}</div>
         </div>
     </div>
 </div>
@@ -700,27 +797,35 @@ def exibir_card_arcos(titulo, pico, red_line, yellow_line, min_green, unidade, f
             pct_barra = min(100, max(8, int((pico / red_line) * 100)))
     
     html = f"""
-    <div style="background: linear-gradient(160deg, #0f172a 0%, #090d16 100%); padding: 16px 18px; border-radius: 12px; border: 1px solid #1e293b; border-top: 3px solid {cor}; margin-bottom: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.35); position: relative; overflow: hidden;">
+    <div style="background: {T['bg_card_grad']}; padding: 16px 18px; border-radius: 12px; border: 1px solid {T['border']}; border-top: 4px solid {cor}; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); position: relative; overflow: hidden;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <span style="font-size: 11.5px; color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;">{titulo}</span>
-            <span style="font-size: 10px; color: {cor}; background: {bg_badge}; border: 1px solid {cor}44; padding: 2px 8px; border-radius: 12px; font-weight: 700; letter-spacing: 0.5px;">{status}</span>
+            <span style="font-size: 11.5px; color: {T['txt_sec']}; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;">{titulo}</span>
+            <span style="font-size: 10px; color: {cor}; background: {bg_badge}; border: 1px solid {cor}55; padding: 2px 8px; border-radius: 12px; font-weight: 700; letter-spacing: 0.5px;">{status}</span>
         </div>
         <div style="display: flex; align-items: baseline; gap: 6px; margin-bottom: 12px;">
-            <span style="color: #f8fafc; font-size: 30px; font-weight: 700; font-family: 'JetBrains Mono', Consolas, monospace; letter-spacing: -0.5px;">{pico_str}</span>
-            <span style="color: #64748b; font-size: 13px; font-weight: 600;">{unidade}</span>
+            <span style="color: {T['txt_main']}; font-size: 30px; font-weight: 700; font-family: 'JetBrains Mono', Consolas, monospace; letter-spacing: -0.5px;">{pico_str}</span>
+            <span style="color: {T['txt_sec']}; font-size: 13px; font-weight: 600;">{unidade}</span>
         </div>
-        <div style="width: 100%; background: #1e293b; height: 5px; border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
+        <div style="width: 100%; background: {T['border']}; height: 5px; border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
             <div style="width: {pct_barra}%; background: {cor}; height: 100%; border-radius: 4px;"></div>
         </div>
         <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-size: 11px; color: #64748b;">Red Line Limit</span>
-            <span style="font-size: 11.5px; color: #cbd5e1; font-family: 'JetBrains Mono', Consolas, monospace; font-weight: 600;">{limite_str} {unidade}</span>
+            <span style="font-size: 11px; color: {T['txt_muted']}; font-weight: 600;">Red Line Limit</span>
+            <span style="font-size: 11.5px; color: {T['txt_main']}; font-family: 'JetBrains Mono', Consolas, monospace; font-weight: 700;">{limite_str} {unidade}</span>
         </div>
     </div>
     """
     st.markdown(html, unsafe_allow_html=True)
 
 def render_html_table(df_formatted, height=420):
+    modo_claro = T['modo'] == 'light'
+    bg_cont = "#ffffff" if modo_claro else "#090d16"
+    bg_th = "#f1f5f9" if modo_claro else "#0f172a"
+    col_th = "#1e293b" if modo_claro else "#94a3b8"
+    col_td = "#0f172a" if modo_claro else "#e2e8f0"
+    borda_td = "#e2e8f0" if modo_claro else "#131c2e"
+    even_row = "#f8fafc" if modo_claro else "rgba(15, 23, 42, 0.4)"
+
     html_table = df_formatted.to_html(index=False, justify='center', border=0, classes='tabela-grande')
     html_completo = f"""
     <!DOCTYPE html>
@@ -728,16 +833,15 @@ def render_html_table(df_formatted, height=420):
     <head>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
     <style>
-    body {{ background-color: transparent; color: #f8fafc; font-family: 'Inter', 'Segoe UI', sans-serif; margin: 0; }}
-    .tabela-container {{ max-height: {height - 20}px; overflow-y: auto; overflow-x: auto; border: 1px solid #1e293b; border-radius: 10px; background: #090d16; box-shadow: inset 0 2px 8px rgba(0,0,0,0.4); }}
+    body {{ background-color: transparent; color: {col_td}; font-family: 'Inter', 'Segoe UI', sans-serif; margin: 0; }}
+    .tabela-container {{ max-height: {height - 20}px; overflow-y: auto; overflow-x: auto; border: 1px solid {T['border']}; border-radius: 10px; background: {bg_cont}; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }}
     .tabela-container::-webkit-scrollbar {{ width: 8px; height: 8px; }}
-    .tabela-container::-webkit-scrollbar-track {{ background: #090d16; }}
-    .tabela-container::-webkit-scrollbar-thumb {{ background: #334155; border-radius: 4px; }}
-    .tabela-container::-webkit-scrollbar-thumb:hover {{ background: #3b82f6; }}
+    .tabela-container::-webkit-scrollbar-track {{ background: {bg_cont}; }}
+    .tabela-container::-webkit-scrollbar-thumb {{ background: #94a3b8; border-radius: 4px; }}
     .tabela-grande {{ width: 100%; font-size: 13.5px; text-align: center; border-collapse: collapse; white-space: nowrap; }}
-    .tabela-grande th {{ background: #0f172a; color: #94a3b8; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; padding: 13px 14px; position: sticky; top: 0; z-index: 1; border-bottom: 2px solid #1e293b; }}
-    .tabela-grande td {{ padding: 10px 14px; border-bottom: 1px solid #131c2e; font-family: 'JetBrains Mono', Consolas, monospace; color: #e2e8f0; }}
-    .tabela-grande tr:nth-child(even) {{ background-color: rgba(15, 23, 42, 0.4); }}
+    .tabela-grande th {{ background: {bg_th}; color: {col_th}; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; padding: 13px 14px; position: sticky; top: 0; z-index: 1; border-bottom: 2px solid {T['border']}; }}
+    .tabela-grande td {{ padding: 10px 14px; border-bottom: 1px solid {borda_td}; font-family: 'JetBrains Mono', Consolas, monospace; color: {col_td}; font-weight: 500; }}
+    .tabela-grande tr:nth-child(even) {{ background-color: {even_row}; }}
     .tabela-grande tr:hover {{ background-color: rgba(59, 130, 246, 0.12); }}
     </style>
     </head>
@@ -1098,11 +1202,11 @@ arquivos_up = st.file_uploader(
 )
 
 if not arquivos_up:
-    st.markdown("""
-    <div style="background: rgba(15, 23, 42, 0.45); border: 1px solid #1e293b; border-radius: 12px; padding: 36px 24px; text-align: center; margin-top: 15px;">
+    st.markdown(f"""
+    <div style="background: {T['bg_card_grad']}; border: 1px solid {T['border']}; border-radius: 12px; padding: 36px 24px; text-align: center; margin-top: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
         <div style="font-size: 38px; margin-bottom: 10px;">🛰️</div>
-        <h3 style="margin: 0; color: #e2e8f0; font-size: 18px;">Aguardando Ingestão de Telemetria</h3>
-        <p style="color: #64748b; font-size: 13.5px; max-width: 560px; margin: 8px auto 0 auto;">
+        <h3 style="margin: 0; color: {T['txt_main']}; font-size: 18px;">Aguardando Ingestão de Telemetria</h3>
+        <p style="color: {T['txt_sec']}; font-size: 13.5px; max-width: 560px; margin: 8px auto 0 auto;">
             Arraste <b>1 arquivo CSV</b> acima para auditoria completa de Voo Solo, ou selecione <b>2 arquivos CSV</b> simultaneamente para Análise de Formatura (Líder/Ala) ou Trend Monitoring de Motores.
         </p>
     </div>
@@ -1172,12 +1276,12 @@ if arquivos_up:
                         )
                         
                         fig_dist = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.07, subplot_titles=("1. Separação Horizontal Líder-Ala (Metros)", "2. Perfil Vertical de Altitude MSL (ft)", "3. Atitude Longitudinal / Pitch (º)"))
-                        fig_dist.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['Distancia_m'], name="Separação (m)", fill='tozeroy', fillcolor='rgba(56, 189, 248, 0.12)', line=dict(color='#38bdf8', width=2)), row=1, col=1)
-                        if 'AltMSL_lider' in df_merge.columns: fig_dist.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['AltMSL_lider'], name="Alt Líder", line=dict(color='#f97316', width=2)), row=2, col=1)
-                        if 'AltMSL_ala' in df_merge.columns: fig_dist.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['AltMSL_ala'], name="Alt Ala", line=dict(color='#3b82f6', width=2, dash='dot')), row=2, col=1)
-                        if 'Pitch_lider' in df_merge.columns: fig_dist.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['Pitch_lider'], name="Pitch Líder", line=dict(color='#f97316', width=2)), row=3, col=1)
-                        if 'Pitch_ala' in df_merge.columns: fig_dist.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['Pitch_ala'], name="Pitch Ala", line=dict(color='#3b82f6', width=2, dash='dot')), row=3, col=1)
-                        fig_dist.update_layout(template="plotly_dark", paper_bgcolor="#090d16", plot_bgcolor="#090d16", height=820, hovermode="x unified", margin=dict(l=15, r=15, t=35, b=15))
+                        fig_dist.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['Distancia_m'], name="Separação (m)", fill='tozeroy', fillcolor='rgba(56, 189, 248, 0.12)', line=dict(color='#0284c7', width=2)), row=1, col=1)
+                        if 'AltMSL_lider' in df_merge.columns: fig_dist.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['AltMSL_lider'], name="Alt Líder", line=dict(color='#ea580c', width=2)), row=2, col=1)
+                        if 'AltMSL_ala' in df_merge.columns: fig_dist.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['AltMSL_ala'], name="Alt Ala", line=dict(color='#2563eb', width=2, dash='dot')), row=2, col=1)
+                        if 'Pitch_lider' in df_merge.columns: fig_dist.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['Pitch_lider'], name="Pitch Líder", line=dict(color='#ea580c', width=2)), row=3, col=1)
+                        if 'Pitch_ala' in df_merge.columns: fig_dist.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['Pitch_ala'], name="Pitch Ala", line=dict(color='#2563eb', width=2, dash='dot')), row=3, col=1)
+                        fig_dist.update_layout(template=T['plotly_template'], paper_bgcolor=T['plotly_bg'], plot_bgcolor=T['plotly_bg'], height=820, hovermode="x unified", margin=dict(l=15, r=15, t=35, b=15))
                         st.plotly_chart(fig_dist, use_container_width=True)
                         
                         st.subheader("🚨 Top 15 Momentos de Maior Afastamento na Formatura")
@@ -1198,19 +1302,19 @@ if arquivos_up:
 
                     with aba_comp:
                         fig_comp = make_subplots(rows=6, cols=1, shared_xaxes=True, vertical_spacing=0.03, subplot_titles=("1. Altitude MSL (ft)", "2. Fator de Carga (Força G)", "3. Torque (Lbs)", "4. Temperatura T5 / ITT (ºC)", "5. Rotação Ng (%)", "6. Rotação Hélice Nh (%)"))
-                        if 'AltMSL_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['AltMSL_lider'], name="Alt Líder", line=dict(color='#f97316', width=2)), row=1, col=1)
-                        if 'AltMSL_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['AltMSL_ala'], name="Alt Ala", line=dict(color='#3b82f6', width=2, dash='dot')), row=1, col=1)
-                        if 'NormAc_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['NormAc_lider'], name="G Líder", line=dict(color='#f97316', width=2)), row=2, col=1)
-                        if 'NormAc_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['NormAc_ala'], name="G Ala", line=dict(color='#3b82f6', width=2)), row=2, col=1)
-                        if 'E1 Torq ft lbs_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 Torq ft lbs_lider'], name="Tq Líder", line=dict(color='#f97316', width=2)), row=3, col=1)
-                        if 'E1 Torq ft lbs_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 Torq ft lbs_ala'], name="Tq Ala", line=dict(color='#3b82f6', width=2)), row=3, col=1)
-                        if 'E1 ITT_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 ITT_lider'], name="T5 Líder", line=dict(color='#f97316', width=2)), row=4, col=1)
-                        if 'E1 ITT_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 ITT_ala'], name="T5 Ala", line=dict(color='#3b82f6', width=2)), row=4, col=1)
-                        if 'E1 NG_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 NG_lider'], name="Ng Líder", line=dict(color='#f97316', width=2)), row=5, col=1)
-                        if 'E1 NG_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 NG_ala'], name="Ng Ala", line=dict(color='#3b82f6', width=2)), row=5, col=1)
-                        if 'E1 NP %_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 NP %_lider'], name="Nh Líder", line=dict(color='#f97316', width=2)), row=6, col=1)
-                        if 'E1 NP %_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 NP %_ala'], name="Nh Ala", line=dict(color='#3b82f6', width=2)), row=6, col=1)
-                        fig_comp.update_layout(template="plotly_dark", paper_bgcolor="#090d16", plot_bgcolor="#090d16", height=1150, hovermode="x unified", margin=dict(l=15, r=15, t=35, b=15))
+                        if 'AltMSL_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['AltMSL_lider'], name="Alt Líder", line=dict(color='#ea580c', width=2)), row=1, col=1)
+                        if 'AltMSL_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['AltMSL_ala'], name="Alt Ala", line=dict(color='#2563eb', width=2, dash='dot')), row=1, col=1)
+                        if 'NormAc_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['NormAc_lider'], name="G Líder", line=dict(color='#ea580c', width=2)), row=2, col=1)
+                        if 'NormAc_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['NormAc_ala'], name="G Ala", line=dict(color='#2563eb', width=2)), row=2, col=1)
+                        if 'E1 Torq ft lbs_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 Torq ft lbs_lider'], name="Tq Líder", line=dict(color='#ea580c', width=2)), row=3, col=1)
+                        if 'E1 Torq ft lbs_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 Torq ft lbs_ala'], name="Tq Ala", line=dict(color='#2563eb', width=2)), row=3, col=1)
+                        if 'E1 ITT_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 ITT_lider'], name="T5 Líder", line=dict(color='#ea580c', width=2)), row=4, col=1)
+                        if 'E1 ITT_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 ITT_ala'], name="T5 Ala", line=dict(color='#2563eb', width=2)), row=4, col=1)
+                        if 'E1 NG_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 NG_lider'], name="Ng Líder", line=dict(color='#ea580c', width=2)), row=5, col=1)
+                        if 'E1 NG_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 NG_ala'], name="Ng Ala", line=dict(color='#2563eb', width=2)), row=5, col=1)
+                        if 'E1 NP %_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 NP %_lider'], name="Nh Líder", line=dict(color='#ea580c', width=2)), row=6, col=1)
+                        if 'E1 NP %_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 NP %_ala'], name="Nh Ala", line=dict(color='#2563eb', width=2)), row=6, col=1)
+                        fig_comp.update_layout(template=T['plotly_template'], paper_bgcolor=T['plotly_bg'], plot_bgcolor=T['plotly_bg'], height=1150, hovermode="x unified", margin=dict(l=15, r=15, t=35, b=15))
                         st.plotly_chart(fig_comp, use_container_width=True)
 
                         st.divider()
@@ -1222,9 +1326,9 @@ if arquivos_up:
 
                     with aba_3d:
                         fig_3d = go.Figure()
-                        fig_3d.add_trace(go.Scatter3d(x=df_merge['Longitude_lider'], y=df_merge['Latitude_lider'], z=df_merge['AltMSL_lider'], mode='lines', line=dict(color='#f97316', width=4), name="Líder"))
-                        fig_3d.add_trace(go.Scatter3d(x=df_merge['Longitude_ala'], y=df_merge['Latitude_ala'], z=df_merge['AltMSL_ala'], mode='lines', line=dict(color='#3b82f6', width=4), name="Ala"))
-                        fig_3d.update_layout(template="plotly_dark", paper_bgcolor="#090d16", height=700, margin=dict(l=0, r=0, b=0, t=20), scene=dict(aspectmode='auto'))
+                        fig_3d.add_trace(go.Scatter3d(x=df_merge['Longitude_lider'], y=df_merge['Latitude_lider'], z=df_merge['AltMSL_lider'], mode='lines', line=dict(color='#ea580c', width=4), name="Líder"))
+                        fig_3d.add_trace(go.Scatter3d(x=df_merge['Longitude_ala'], y=df_merge['Latitude_ala'], z=df_merge['AltMSL_ala'], mode='lines', line=dict(color='#2563eb', width=4), name="Ala"))
+                        fig_3d.update_layout(template=T['plotly_template'], paper_bgcolor=T['plotly_bg'], height=700, margin=dict(l=0, r=0, b=0, t=20), scene=dict(aspectmode='auto'))
                         st.plotly_chart(fig_3d, use_container_width=True)
                         st.divider()
                         st.markdown("📝 **Observações - Trajetória Espacial 3D**")
@@ -1354,8 +1458,8 @@ if arquivos_up:
                 with aba_graf_comp:
                     fig_trend = make_subplots(rows=4, cols=1, shared_xaxes=True, vertical_spacing=0.04, subplot_titles=("1. Perfil de Altitude MSL (ft)", "2. Torque do Motor 1 (Lbs)", "3. Temperatura T5 / ITT Motor 1 (ºC)", "4. Rotação Ng Motor 1 (%)"))
                     
-                    corA = '#f97316'
-                    corB = '#38bdf8'
+                    corA = '#ea580c'
+                    corB = '#0284c7'
 
                     if 'AltMSL' in dfA.columns: fig_trend.add_trace(go.Scattergl(x=dfA['Minutos'], y=dfA['AltMSL'], name="Alt Voo A", line=dict(color=corA, width=2, dash='dot')), row=1, col=1)
                     if 'AltMSL' in dfB.columns: fig_trend.add_trace(go.Scattergl(x=dfB['Minutos'], y=dfB['AltMSL'], name="Alt Voo B", line=dict(color=corB, width=2)), row=1, col=1)
@@ -1366,7 +1470,7 @@ if arquivos_up:
                     if 'E1 NG' in dfA.columns: fig_trend.add_trace(go.Scattergl(x=dfA['Minutos'], y=dfA['E1 NG'], name="Ng Voo A", line=dict(color=corA, width=2)), row=4, col=1)
                     if 'E1 NG' in dfB.columns: fig_trend.add_trace(go.Scattergl(x=dfB['Minutos'], y=dfB['E1 NG'], name="Ng Voo B", line=dict(color=corB, width=2)), row=4, col=1)
 
-                    fig_trend.update_layout(template="plotly_dark", paper_bgcolor="#090d16", plot_bgcolor="#090d16", height=900, hovermode="x unified", xaxis4_title="Tempo de Voo Sincronizado (Minutos)", margin=dict(l=15, r=15, t=35, b=15))
+                    fig_trend.update_layout(template=T['plotly_template'], paper_bgcolor=T['plotly_bg'], plot_bgcolor=T['plotly_bg'], height=900, hovermode="x unified", xaxis4_title="Tempo de Voo Sincronizado (Minutos)", margin=dict(l=15, r=15, t=35, b=15))
                     st.plotly_chart(fig_trend, use_container_width=True)
 
                     st.divider()
@@ -1427,14 +1531,12 @@ if arquivos_up:
                 max_ng = df['E1 NG'].max() if 'E1 NG' in df.columns else 0
                 max_nh = df['E1 NP %'].max() if 'E1 NP %' in df.columns else 0
 
-                # 1. VOO INVERTIDO NA INSTRUÇÃO (Máx 15 segundos contínuos com G negativo)
                 if 'NormAc' in df.columns:
                     em_invertido = df['NormAc'] < -0.15
                     seg_invertido = int(em_invertido.groupby((~em_invertido).cumsum()).sum().max()) if not em_invertido.empty else 0
                     if seg_invertido > 15:
                         add_alerta_contexto('NormAc', min_g, f"🔴 EXCEDÊNCIA VOO INVERTIDO (INSTRUÇÃO): {seg_invertido}s contínuos (Limite Manual: 15s)")
 
-                # 2. TORQUE (Máx Decolagem: 1795 lb.ft)
                 if verificar_temporizador(df, 'E1 Torq ft lbs', 2100, 2):
                     add_alerta_contexto('E1 Torq ft lbs', max_torq, f"🔴 OVER-TORQUE CRÍTICO: >2100 lb.ft por 2s ({max_torq:.0f} lb.ft)")
                 elif verificar_temporizador(df, 'E1 Torq ft lbs', 1970, 1):
@@ -1442,7 +1544,6 @@ if arquivos_up:
                 elif l_tq_red is not None and max_torq > l_tq_red:
                     add_alerta_contexto('E1 Torq ft lbs', max_torq, f"🔴 LINHA VERMELHA Torque Decolagem (>1795 lb.ft): {max_torq:.0f} lb.ft")
                 
-                # 3. GERADOR DE GÁS - Ng (Máx Decolagem/Subida/Cruzeiro: 101,5%)
                 if verificar_temporizador(df, 'E1 NG', 102.6, 6):
                     add_alerta_contexto('E1 NG', max_ng, f"🔴 NG CRÍTICO: >102.6% por 6 seg ({max_ng:.1f}%)")
                 elif l_ng_red is not None and max_ng > l_ng_red:
@@ -1450,7 +1551,6 @@ if arquivos_up:
                 elif l_ng_yel is not None and max_ng > l_ng_yel:
                     add_alerta_contexto('E1 NG', max_ng, f"🟡 ARCO AMARELO Ng (>100.0%): {max_ng:.1f}%")
                 
-                # 4. TEMPERATURA T5 / ITT (Partida: 1090°C/2s | Aceleração: 850°C/2s | Dec: 790°C | Subida: 765°C | Cruzeiro: 740°C)
                 if verificar_temporizador(df, 'E1 ITT', 1090, 2):
                     add_alerta_contexto('E1 ITT', max_itt, f"🔴 T5 CRÍTICA NA PARTIDA: >1090ºC por 2 seg ({max_itt:.0f}ºC)")
                 elif verificar_temporizador(df, 'E1 ITT', 850, 2):
@@ -1462,7 +1562,6 @@ if arquivos_up:
                 elif l_itt_yel is not None and max_itt > l_itt_yel:
                     add_alerta_contexto('E1 ITT', max_itt, f"🟡 ARCO AMARELO T5 CRUZEIRO (>740ºC): {max_itt:.0f}ºC")
                 
-                # 5. ROTAÇÃO DA HÉLICE - Nh (Máx Decolagem/Subida/Cruzeiro: 100%)
                 if verificar_temporizador(df, 'E1 NP %', 110, 1):
                     add_alerta_contexto('E1 NP %', max_nh, f"🔴 OVERSPEED HÉLICE CRÍTICO: >110% ({max_nh:.1f}%)")
                 elif verificar_temporizador(df, 'E1 NP %', 106, 1):
@@ -1470,7 +1569,6 @@ if arquivos_up:
                 elif l_nh_red is not None and max_nh > l_nh_red:
                     add_alerta_contexto('E1 NP %', max_nh, f"🔴 LINHA VERMELHA Nh (>100.0%): {max_nh:.1f}%")
 
-                # 6. LUZ PRESSÃO DO ÓLEO (Abaixo de 40 PSI com motor em funcionamento)
                 if 'E1 OilP' in df.columns and 'E1 NG' in df.columns:
                     df_mot_ligado = df[df['E1 NG'] > 50]
                     if not df_mot_ligado.empty and (df_mot_ligado['E1 OilP'] < 40).any():
@@ -1527,26 +1625,26 @@ if arquivos_up:
             txt_status_missao = f"{len(alertas)} EXCEDÊNCIA(S) DETECTADA(S)" if len(alertas) > 0 else "OPERAÇÃO NORMAL (ARCO VERDE)"
 
             st.markdown(f"""
-            <div style="background: #090d16; border: 1px solid #1e293b; border-left: 4px solid {cor_status_missao}; border-radius: 10px; padding: 14px 20px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+            <div style="background: {T['bg_card']}; border: 1px solid {T['border']}; border-left: 5px solid {cor_status_missao}; border-radius: 10px; padding: 14px 20px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
                 <div style="display: flex; gap: 28px; flex-wrap: wrap;">
                     <div>
-                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase;">Acionamento (Start)</div>
-                        <div style="font-size: 15px; font-weight: 700; color: #f8fafc; font-family: 'JetBrains Mono', Consolas, monospace;">{tempos['acionamento']}</div>
+                        <div style="font-size: 10px; color: {T['txt_sec']}; font-weight: 700; text-transform: uppercase;">Acionamento (Start)</div>
+                        <div style="font-size: 15px; font-weight: 700; color: {T['txt_main']}; font-family: 'JetBrains Mono', Consolas, monospace;">{tempos['acionamento']}</div>
                     </div>
                     <div>
-                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase;">Decolagem (T/O)</div>
-                        <div style="font-size: 15px; font-weight: 700; color: #38bdf8; font-family: 'JetBrains Mono', Consolas, monospace;">{tempos['decolagem']}</div>
+                        <div style="font-size: 10px; color: {T['txt_sec']}; font-weight: 700; text-transform: uppercase;">Decolagem (T/O)</div>
+                        <div style="font-size: 15px; font-weight: 700; color: {T['accent']}; font-family: 'JetBrains Mono', Consolas, monospace;">{tempos['decolagem']}</div>
                     </div>
                     <div>
-                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase;">Pouso (LDG)</div>
-                        <div style="font-size: 15px; font-weight: 700; color: #38bdf8; font-family: 'JetBrains Mono', Consolas, monospace;">{tempos['pouso']}</div>
+                        <div style="font-size: 10px; color: {T['txt_sec']}; font-weight: 700; text-transform: uppercase;">Pouso (LDG)</div>
+                        <div style="font-size: 15px; font-weight: 700; color: {T['accent']}; font-family: 'JetBrains Mono', Consolas, monospace;">{tempos['pouso']}</div>
                     </div>
                     <div>
-                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase;">Corte (Shutdown)</div>
-                        <div style="font-size: 15px; font-weight: 700; color: #f8fafc; font-family: 'JetBrains Mono', Consolas, monospace;">{tempos['corte']}</div>
+                        <div style="font-size: 10px; color: {T['txt_sec']}; font-weight: 700; text-transform: uppercase;">Corte (Shutdown)</div>
+                        <div style="font-size: 15px; font-weight: 700; color: {T['txt_main']}; font-family: 'JetBrains Mono', Consolas, monospace;">{tempos['corte']}</div>
                     </div>
                     <div>
-                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase;">Tempo de Voo</div>
+                        <div style="font-size: 10px; color: {T['txt_sec']}; font-weight: 700; text-transform: uppercase;">Tempo de Voo</div>
                         <div style="font-size: 15px; font-weight: 700; color: #10b981; font-family: 'JetBrains Mono', Consolas, monospace;">{tempos['t_voo']}</div>
                     </div>
                 </div>
@@ -1608,10 +1706,10 @@ if arquivos_up:
                 df_mapa = df[(df['IAS'] > 30)].dropna(subset=['Latitude', 'Longitude'])
                 if not df_mapa.empty:
                     fig_map_temp = go.Figure()
-                    fig_map_temp.add_trace(go.Scattermap(lat=df_mapa['Latitude'], lon=df_mapa['Longitude'], mode='lines', line=dict(width=4, color='#38bdf8'), name="Rota"))
+                    fig_map_temp.add_trace(go.Scattermap(lat=df_mapa['Latitude'], lon=df_mapa['Longitude'], mode='lines', line=dict(width=4, color='#0284c7'), name="Rota"))
                     fig_map_temp.add_trace(go.Scattermap(lat=[df_mapa['Latitude'].iloc[0]], lon=[df_mapa['Longitude'].iloc[0]], mode='markers', marker=dict(size=13, color='#10b981'), name="Decolagem"))
                     fig_map_temp.add_trace(go.Scattermap(lat=[df_mapa['Latitude'].iloc[-1]], lon=[df_mapa['Longitude'].iloc[-1]], mode='markers', marker=dict(size=13, color='#ef4444'), name="Corte"))
-                    fig_map_temp.update_layout(map_style="carto-darkmatter", map_zoom=8, map_center={"lat": df_mapa['Latitude'].mean(), "lon": df_mapa['Longitude'].mean()}, margin={"r":0,"t":0,"l":0,"b":0}, height=420, showlegend=False)
+                    fig_map_temp.update_layout(map_style=T['map_style'], map_zoom=8, map_center={"lat": df_mapa['Latitude'].mean(), "lon": df_mapa['Longitude'].mean()}, margin={"r":0,"t":0,"l":0,"b":0}, height=420, showlegend=False)
                     st.plotly_chart(fig_map_temp, use_container_width=True)
                     
                     kml = simplekml.Kml()
@@ -1661,13 +1759,13 @@ if arquivos_up:
                 st.markdown("#### 📈 Gráficos Sincronizados de Dinâmica e Propulsão")
                 fig_dash = make_subplots(rows=6, cols=1, shared_xaxes=True, vertical_spacing=0.03, specs=[[{"secondary_y": True}], [{"secondary_y": False}], [{"secondary_y": False}], [{"secondary_y": False}], [{"secondary_y": False}], [{"secondary_y": False}]], subplot_titles=("1. Altitude MSL (ft) e Velocidade IAS (kt)", "2. Fator de Carga Normal (Força G)", "3. Torque do Motor (lb.ft)", "4. Temperatura Inter-Turbinas - T5 / ITT (ºC)", "5. Rotação do Gerador de Gás - Ng (%)", "6. Rotação da Hélice - Nh (%)"))
                 cores_motores = ['#10b981', '#f59e0b', '#f97316', '#8b5cf6']
-                cores_itt = ['#f59e0b', '#ef4444', '#ea580c', '#dc2626']
-                cores_ng = ['#a855f7', '#38bdf8', '#14b8a6', '#f97316']
-                cores_nh = ['#eab308', '#22c55e', '#64748b', '#cbd5e1']
+                cores_itt = ['#d97706', '#ef4444', '#ea580c', '#dc2626']
+                cores_ng = ['#9333ea', '#0284c7', '#0d9488', '#ea580c']
+                cores_nh = ['#ca8a04', '#16a34a', '#475569', '#64748b']
                 
-                if 'AltMSL' in df.columns: fig_dash.add_trace(go.Scattergl(x=df['Datetime'], y=df['AltMSL'], name="Altitude (ft)", fill='tozeroy', fillcolor='rgba(59, 130, 246, 0.1)', line=dict(color='#3b82f6', width=2)), row=1, col=1, secondary_y=False)
-                if 'IAS' in df.columns: fig_dash.add_trace(go.Scattergl(x=df['Datetime'], y=df['IAS'], name="Velocidade (kt)", line=dict(color='#06b6d4', width=2)), row=1, col=1, secondary_y=True)
-                if 'NormAc' in df.columns: fig_dash.add_trace(go.Scattergl(x=df['Datetime'], y=df['NormAc'], name="Força G", fill='tozeroy', fillcolor='rgba(239, 68, 68, 0.1)', line=dict(color='#ef4444', width=2)), row=2, col=1)
+                if 'AltMSL' in df.columns: fig_dash.add_trace(go.Scattergl(x=df['Datetime'], y=df['AltMSL'], name="Altitude (ft)", fill='tozeroy', fillcolor='rgba(37, 99, 235, 0.12)', line=dict(color='#2563eb', width=2)), row=1, col=1, secondary_y=False)
+                if 'IAS' in df.columns: fig_dash.add_trace(go.Scattergl(x=df['Datetime'], y=df['IAS'], name="Velocidade (kt)", line=dict(color='#0891b2', width=2)), row=1, col=1, secondary_y=True)
+                if 'NormAc' in df.columns: fig_dash.add_trace(go.Scattergl(x=df['Datetime'], y=df['NormAc'], name="Força G", fill='tozeroy', fillcolor='rgba(239, 68, 68, 0.12)', line=dict(color='#ef4444', width=2)), row=2, col=1)
                 if l_g_max is not None: fig_dash.add_hline(y=l_g_max, line_dash="dash", line_color="#ef4444", row=2, col=1)
                         
                 for i_m in range(1, qtd_motores_config + 1):
@@ -1681,7 +1779,7 @@ if arquivos_up:
                 if l_ng_red is not None: fig_dash.add_hline(y=l_ng_red, line_dash="dash", line_color="#ef4444", row=5, col=1)
                 if l_nh_red is not None: fig_dash.add_hline(y=l_nh_red, line_dash="dash", line_color="#ef4444", row=6, col=1)
                 
-                fig_dash.update_layout(template="plotly_dark", paper_bgcolor="#090d16", plot_bgcolor="#090d16", height=1200, hovermode="x unified", margin=dict(l=15, r=15, t=35, b=15), legend=dict(title="Sensores", orientation="v", yanchor="top", y=1, xanchor="left", x=1.02, bgcolor="rgba(9,13,22,0.8)"))
+                fig_dash.update_layout(template=T['plotly_template'], paper_bgcolor=T['plotly_bg'], plot_bgcolor=T['plotly_bg'], height=1200, hovermode="x unified", margin=dict(l=15, r=15, t=35, b=15), legend=dict(title="Sensores", orientation="v", yanchor="top", y=1, xanchor="left", x=1.02))
                 st.plotly_chart(fig_dash, use_container_width=True)
 
                 st.divider()
@@ -1720,7 +1818,7 @@ if arquivos_up:
                 if not voo_ativo.empty and 'Latitude' in voo_ativo.columns and 'Longitude' in voo_ativo.columns:
                     df_3d = voo_ativo.dropna(subset=['Latitude', 'Longitude', 'AltMSL'])
                     fig_3d_temp = go.Figure(data=[go.Scatter3d(x=df_3d['Longitude'], y=df_3d['Latitude'], z=df_3d['AltMSL'], mode='lines', line=dict(color=df_3d['IAS'], colorscale='Turbo', width=4, colorbar=dict(title="IAS (kt)", len=0.5, x=1.05)))])
-                    fig_3d_temp.update_layout(template="plotly_dark", paper_bgcolor="#090d16", height=600, margin=dict(l=0, r=0, b=0, t=20), scene=dict(aspectmode='auto'))
+                    fig_3d_temp.update_layout(template=T['plotly_template'], paper_bgcolor=T['plotly_bg'], height=600, margin=dict(l=0, r=0, b=0, t=20), scene=dict(aspectmode='auto'))
                     st.plotly_chart(fig_3d_temp, use_container_width=True)
 
                 st.divider()
@@ -1744,10 +1842,10 @@ if arquivos_up:
                 alertas_txt = st.text_area("Registo de Alertas e Excedências (Injetado na Tabela 1 do Word):", value="\n".join(alertas), height=110)
                 
                 st.divider()
-                st.markdown("""
-                <div style="background: linear-gradient(135deg, rgba(29, 78, 216, 0.15) 0%, rgba(15, 23, 42, 0.8) 100%); border: 1px solid #1d4ed8; border-radius: 10px; padding: 16px 20px; margin-bottom: 12px;">
-                    <div style="font-size: 14px; font-weight: 700; color: #60a5fa;">🤖 Inteligência Artificial de Inspetoria Aeronáutica (Padrão T-27M)</div>
-                    <div style="font-size: 12.5px; color: #94a3b8; margin-top: 4px;">Gera automaticamente o Estudo de Caso e o Parecer de Manutenção confrontando os dados do voo com os limites operacionais oficiais do T-27M.</div>
+                st.markdown(f"""
+                <div style="background: {T['bg_card_grad']}; border: 1px solid {T['accent']}; border-left: 5px solid {T['accent']}; border-radius: 10px; padding: 16px 20px; margin-bottom: 12px;">
+                    <div style="font-size: 14px; font-weight: 700; color: {T['accent']};">🤖 Inteligência Artificial de Inspetoria Aeronáutica (Padrão T-27M)</div>
+                    <div style="font-size: 12.5px; color: {T['txt_sec']}; margin-top: 4px;">Gera automaticamente o Estudo de Caso e o Parecer de Manutenção confrontando os dados do voo com os limites operacionais oficiais do T-27M.</div>
                 </div>
                 """, unsafe_allow_html=True)
 
