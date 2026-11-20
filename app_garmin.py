@@ -398,7 +398,7 @@ if st.session_state.usuario_logado is None:
     st.markdown("<br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1.2, 1.8, 1.2])
 
-   with col2:
+    with col2:
         escolha_tema_login = st.radio(
             "Tema Visual:",
             ["Claro (Diurno)", "Escuro (Cockpit)"],
