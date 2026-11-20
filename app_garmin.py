@@ -250,6 +250,42 @@ hr {{
 }}
 </style>"""
     st.markdown(css, unsafe_allow_html=True)
+    if t['modo'] == 'light':
+        st.markdown("""<style>
+section[data-testid="stSidebar"], section[data-testid="stSidebar"] > div, [data-testid="stSidebarContent"] {
+    background-color: #d9eaff !important;
+    background: #d9eaff !important;
+}
+[data-baseweb="tab-list"] {
+    background-color: #cfe3ff !important;
+    padding: 6px !important;
+    border-radius: 10px !important;
+}
+[data-baseweb="tab-list"] button {
+    background-color: #ffffff !important;
+    border: 1px solid #93c5fd !important;
+    border-radius: 7px !important;
+    padding: 0 16px !important;
+}
+[data-baseweb="tab-list"] button p, [data-baseweb="tab-list"] button span, [data-baseweb="tab-list"] button div {
+    color: #1e3a8a !important;
+    -webkit-text-fill-color: #1e3a8a !important;
+    font-weight: 700 !important;
+}
+[data-baseweb="tab-list"] button[aria-selected="true"] {
+    background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
+    border: 1px solid #1e3a8a !important;
+}
+[data-baseweb="tab-list"] button[aria-selected="true"] p, [data-baseweb="tab-list"] button[aria-selected="true"] span, [data-baseweb="tab-list"] button[aria-selected="true"] div {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+}
+[data-testid="stFileUploaderFile"], [data-testid="stFileUploaderFile"] div {
+    background-color: #f0f9ff !important;
+    color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+}
+</style>""", unsafe_allow_html=True)
 
 injetar_estilo_profissional(T)
 
