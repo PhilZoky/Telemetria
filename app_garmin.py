@@ -143,40 +143,41 @@ label, .stMarkdown p, .stRadio label, [data-testid="stWidgetLabel"] p {{
 }}
 
 /* Abas forçadas (Light e Dark) */
-html body [data-testid="stTabs"] [data-baseweb="tab-list"] {{
+.stTabs [data-baseweb="tab-list"],
+div[role="tablist"] {{
     gap: 8px !important;
     background-color: {t['tab_bg']} !important;
     padding: 6px !important;
     border-radius: 10px !important;
     border: 1px solid {t['border']} !important;
 }}
-html body [data-testid="stTabs"] button[role="tab"] {{
-    height: 44px !important;
+.stTabs button[data-baseweb="tab"],
+div[role="tablist"] button[role="tab"] {{
+    height: 42px !important;
     border-radius: 7px !important;
     padding: 0 18px !important;
     background-color: {t['bg_card']} !important;
     border: 1px solid {t['border']} !important;
 }}
-html body [data-testid="stTabs"] button[role="tab"] p,
-html body [data-testid="stTabs"] button[role="tab"] span,
-html body [data-testid="stTabs"] button[role="tab"] div {{
+.stTabs button[data-baseweb="tab"] *,
+div[role="tablist"] button[role="tab"] * {{
     color: {t['tab_txt']} !important;
     -webkit-text-fill-color: {t['tab_txt']} !important;
     font-weight: 700 !important;
     font-size: 12.5px !important;
 }}
-html body [data-testid="stTabs"] button[role="tab"][aria-selected="true"] {{
+.stTabs button[data-baseweb="tab"][aria-selected="true"],
+div[role="tablist"] button[role="tab"][aria-selected="true"] {{
     background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
     border: 1px solid #1e3a8a !important;
 }}
-html body [data-testid="stTabs"] button[role="tab"][aria-selected="true"] p,
-html body [data-testid="stTabs"] button[role="tab"][aria-selected="true"] span,
-html body [data-testid="stTabs"] button[role="tab"][aria-selected="true"] div {{
+.stTabs button[data-baseweb="tab"][aria-selected="true"] *,
+div[role="tablist"] button[role="tab"][aria-selected="true"] * {{
     color: #ffffff !important;
     -webkit-text-fill-color: #ffffff !important;
 }}
-html body [data-baseweb="tab-highlight"],
-html body [data-baseweb="tab-border"] {{
+.stTabs [data-baseweb="tab-highlight"],
+.stTabs [data-baseweb="tab-border"] {{
     display: none !important;
 }}
 
@@ -204,14 +205,16 @@ html body [data-baseweb="tab-border"] {{
     padding: 10px;
 }}
 [data-testid="stFileUploader"] section,
-[data-testid="stFileUploaderFile"],
-[data-testid="stFileUploaderFile"] > div {{
+[data-testid="stFileUploader"] ul,
+[data-testid="stFileUploader"] li,
+[data-testid="stFileUploader"] [role="listitem"],
+[data-testid="stFileUploaderFile"] {{
     background-color: {t['bg_input']} !important;
     color: {t['txt_main']} !important;
     border-radius: 8px !important;
 }}
-[data-testid="stFileUploader"] section *,
-[data-testid="stFileUploaderFile"] * {{
+[data-testid="stFileUploader"] li *,
+[data-testid="stFileUploader"] section * {{
     color: {t['txt_main']} !important;
     -webkit-text-fill-color: {t['txt_main']} !important;
 }}
@@ -223,7 +226,6 @@ html body [data-baseweb="tab-border"] {{
 [data-testid="stFileUploader"] button * {{
     color: #ffffff !important;
     -webkit-text-fill-color: #ffffff !important;
-}}
 
 /* Inputs, Senha, Autofill e Selectboxes */
 .stTextInput > div > div, .stTextInput > div > div > input,
