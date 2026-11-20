@@ -95,20 +95,22 @@ def injetar_estilo_profissional(t):
     esquema_cor = "light" if t['modo'] == 'light' else "dark"
     css = f"""<style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap');
-:root, html, body, [data-testid="stApp"], .stApp {{
+
+:root, html, body, [data-testid="stApp"] {{
     color-scheme: {esquema_cor} !important;
     --primary-color: {t['accent']} !important;
     --background-color: {t['bg_solid']} !important;
-    --secondary-background-color: {t['bg_card']} !important;
+    --secondary-background-color: {t['bg_sidebar']} !important;
     --text-color: {t['txt_main']} !important;
 }}
+
 html, body, [data-testid="stApp"], .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {{
     font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     background-color: {t['bg_solid']} !important;
     background: {t['bg_app']} !important;
     color: {t['txt_main']} !important;
 }}
-/* Esconde o menu nativo do Streamlit (3 pontinhos / Settings / Theme) */
+
 #MainMenu, [data-testid="stToolbar"], [data-testid="stDecoration"], footer {{
     display: none !important;
     visibility: hidden !important;
@@ -121,61 +123,64 @@ html, body, [data-testid="stApp"], .stApp, [data-testid="stAppViewContainer"], [
     padding-bottom: 3rem !important;
     max-width: 96% !important;
 }}
-}}
-[data-testid="stSidebar"], [data-testid="stSidebarContent"], [data-testid="stSidebarUserContent"], section[data-testid="stSidebar"] > div {{
+
+/* Barra Lateral forçada */
+html body section[data-testid="stSidebar"],
+html body section[data-testid="stSidebar"] > div,
+html body [data-testid="stSidebarContent"],
+html body [data-testid="stSidebarUserContent"] {{
     background-color: {t['bg_sidebar']} !important;
     background: {t['bg_sidebar']} !important;
     border-right: 1px solid {t['border']} !important;
 }}
-[data-testid="stSidebar"] * {{
+html body section[data-testid="stSidebar"] * {{
     color: {t['txt_main']} !important;
 }}
-[data-testid="stSidebar"] .stCaption {{
-    color: {t['txt_sec']} !important;
-}}
+
 label, .stMarkdown p, .stRadio label, [data-testid="stWidgetLabel"] p {{
     color: {t['txt_main']} !important;
     font-weight: 600 !important;
 }}
-/* Abas 100% legíveis em qualquer combinação (Light/Dark) */
-div[data-baseweb="tab-list"] {{
-    gap: 8px;
+
+/* Abas forçadas (Light e Dark) */
+html body [data-testid="stTabs"] [data-baseweb="tab-list"] {{
+    gap: 8px !important;
     background-color: {t['tab_bg']} !important;
-    padding: 6px;
-    border-radius: 10px;
+    padding: 6px !important;
+    border-radius: 10px !important;
     border: 1px solid {t['border']} !important;
 }}
-button[data-baseweb="tab"], button[role="tab"] {{
+html body [data-testid="stTabs"] button[role="tab"] {{
     height: 44px !important;
     border-radius: 7px !important;
-    padding: 0 20px !important;
+    padding: 0 18px !important;
     background-color: {t['bg_card']} !important;
     border: 1px solid {t['border']} !important;
+}}
+html body [data-testid="stTabs"] button[role="tab"] p,
+html body [data-testid="stTabs"] button[role="tab"] span,
+html body [data-testid="stTabs"] button[role="tab"] div {{
     color: {t['tab_txt']} !important;
     -webkit-text-fill-color: {t['tab_txt']} !important;
     font-weight: 700 !important;
     font-size: 12.5px !important;
-    letter-spacing: 0.5px;
 }}
-button[data-baseweb="tab"] *, button[role="tab"] * {{
-    color: {t['tab_txt']} !important;
-    -webkit-text-fill-color: {t['tab_txt']} !important;
-}}
-button[data-baseweb="tab"][aria-selected="true"], button[role="tab"][aria-selected="true"] {{
+html body [data-testid="stTabs"] button[role="tab"][aria-selected="true"] {{
     background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
     border: 1px solid #1e3a8a !important;
+}}
+html body [data-testid="stTabs"] button[role="tab"][aria-selected="true"] p,
+html body [data-testid="stTabs"] button[role="tab"][aria-selected="true"] span,
+html body [data-testid="stTabs"] button[role="tab"][aria-selected="true"] div {{
     color: #ffffff !important;
     -webkit-text-fill-color: #ffffff !important;
-    box-shadow: 0 4px 10px rgba(29, 78, 216, 0.3);
 }}
-button[data-baseweb="tab"][aria-selected="true"] *, button[role="tab"][aria-selected="true"] * {{
-    color: #ffffff !important;
-    -webkit-text-fill-color: #ffffff !important;
-}}
-div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] {{
+html body [data-baseweb="tab-highlight"],
+html body [data-baseweb="tab-border"] {{
     display: none !important;
 }}
-/* Botões Principais */
+
+/* Botões */
 .stButton > button, .stDownloadButton > button {{
     background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
     color: #ffffff !important;
@@ -185,32 +190,30 @@ div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] {{
     padding: 0.55rem 1.2rem !important;
     font-weight: 600 !important;
     font-size: 13px !important;
-    letter-spacing: 0.4px !important;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15) !important;
 }}
 .stButton > button *, .stDownloadButton > button * {{
     color: #ffffff !important;
     -webkit-text-fill-color: #ffffff !important;
 }}
-.stButton > button:hover, .stDownloadButton > button:hover {{
-    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-    transform: translateY(-1px);
-}}
-/* File Uploader */
+
+/* File Uploader e etiqueta do arquivo */
 [data-testid="stFileUploader"] {{
     background-color: {t['bg_card']} !important;
     border: 1.5px dashed {t['accent']} !important;
     border-radius: 10px;
     padding: 10px;
 }}
-[data-testid="stFileUploader"] section, [data-testid="stFileUploaderFile"] {{
+[data-testid="stFileUploader"] section,
+[data-testid="stFileUploaderFile"],
+[data-testid="stFileUploaderFile"] > div {{
     background-color: {t['bg_input']} !important;
     color: {t['txt_main']} !important;
-    border: 1px solid {t['border']} !important;
-    border-radius: 8px;
+    border-radius: 8px !important;
 }}
-[data-testid="stFileUploader"] section *, [data-testid="stFileUploaderFile"] * {{
+[data-testid="stFileUploader"] section *,
+[data-testid="stFileUploaderFile"] * {{
     color: {t['txt_main']} !important;
+    -webkit-text-fill-color: {t['txt_main']} !important;
 }}
 [data-testid="stFileUploader"] button {{
     background-color: {t['accent']} !important;
@@ -219,9 +222,14 @@ div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] {{
 }}
 [data-testid="stFileUploader"] button * {{
     color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
 }}
-/* Inputs, Senha, Autofill do Navegador e Selectboxes */
-.stTextInput > div > div, .stTextInput > div > div > input, .stNumberInput > div > div > input, .stTextArea > div > div, .stTextArea > div > div > textarea, .stSelectbox > div > div, [data-baseweb="select"] > div {{
+
+/* Inputs, Senha, Autofill e Selectboxes */
+.stTextInput > div > div, .stTextInput > div > div > input,
+.stNumberInput > div > div > input,
+.stTextArea > div > div, .stTextArea > div > div > textarea,
+.stSelectbox > div > div, [data-baseweb="select"] > div {{
     background-color: {t['bg_input']} !important;
     border-color: {t['border']} !important;
     color: {t['txt_main']} !important;
@@ -229,11 +237,11 @@ div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] {{
     border-radius: 8px !important;
     font-weight: 500 !important;
 }}
-input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus, input:-webkit-autofill:active {{
+input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus {{
     -webkit-box-shadow: 0 0 0 1000px {t['bg_input']} inset !important;
     -webkit-text-fill-color: {t['txt_main']} !important;
-    transition: background-color 5000s ease-in-out 0s;
 }}
+
 [data-testid="stExpander"], .streamlit-expanderHeader {{
     background-color: {t['bg_card']} !important;
     border: 1px solid {t['border']} !important;
@@ -249,44 +257,7 @@ hr {{
     margin: 1.4rem 0 !important;
 }}
 </style>"""
-    st.markdown(css, unsafe_allow_html=True)
-    if t['modo'] == 'light':
-        st.markdown("""<style>
-section[data-testid="stSidebar"], section[data-testid="stSidebar"] > div, [data-testid="stSidebarContent"] {
-    background-color: #d9eaff !important;
-    background: #d9eaff !important;
-}
-[data-baseweb="tab-list"] {
-    background-color: #cfe3ff !important;
-    padding: 6px !important;
-    border-radius: 10px !important;
-}
-[data-baseweb="tab-list"] button {
-    background-color: #ffffff !important;
-    border: 1px solid #93c5fd !important;
-    border-radius: 7px !important;
-    padding: 0 16px !important;
-}
-[data-baseweb="tab-list"] button p, [data-baseweb="tab-list"] button span, [data-baseweb="tab-list"] button div {
-    color: #1e3a8a !important;
-    -webkit-text-fill-color: #1e3a8a !important;
-    font-weight: 700 !important;
-}
-[data-baseweb="tab-list"] button[aria-selected="true"] {
-    background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
-    border: 1px solid #1e3a8a !important;
-}
-[data-baseweb="tab-list"] button[aria-selected="true"] p, [data-baseweb="tab-list"] button[aria-selected="true"] span, [data-baseweb="tab-list"] button[aria-selected="true"] div {
-    color: #ffffff !important;
-    -webkit-text-fill-color: #ffffff !important;
-}
-[data-testid="stFileUploaderFile"], [data-testid="stFileUploaderFile"] div {
-    background-color: #f0f9ff !important;
-    color: #0f172a !important;
-    -webkit-text-fill-color: #0f172a !important;
-}
-</style>""", unsafe_allow_html=True)
-
+    st.html(css)
 injetar_estilo_profissional(T)
 
 
