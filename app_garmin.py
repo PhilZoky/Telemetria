@@ -92,24 +92,35 @@ def obter_paleta_cores():
 T = obter_paleta_cores()
 
 def injetar_estilo_profissional(t):
+    esquema_cor = "light" if t['modo'] == 'light' else "dark"
     css = f"""<style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap');
+:root, html, body, [data-testid="stApp"], .stApp {{
+    color-scheme: {esquema_cor} !important;
+    --primary-color: {t['accent']} !important;
+    --background-color: {t['bg_solid']} !important;
+    --secondary-background-color: {t['bg_card']} !important;
+    --text-color: {t['txt_main']} !important;
+}}
 html, body, [data-testid="stApp"], .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {{
     font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     background-color: {t['bg_solid']} !important;
     background: {t['bg_app']} !important;
     color: {t['txt_main']} !important;
 }}
+/* Esconde o menu nativo do Streamlit (3 pontinhos / Settings / Theme) */
+#MainMenu, [data-testid="stToolbar"], [data-testid="stDecoration"], footer {{
+    display: none !important;
+    visibility: hidden !important;
+}}
 [data-testid="stHeader"] {{
     background-color: transparent !important;
 }}
-[data-testid="stToolbar"] {{
-    right: 1rem !important;
-}}
 .block-container {{
-    padding-top: 2.8rem !important;
+    padding-top: 2.2rem !important;
     padding-bottom: 3rem !important;
     max-width: 96% !important;
+}}
 }}
 [data-testid="stSidebar"], [data-testid="stSidebarContent"], [data-testid="stSidebarUserContent"], section[data-testid="stSidebar"] > div {{
     background-color: {t['bg_sidebar']} !important;
@@ -387,7 +398,17 @@ if st.session_state.usuario_logado is None:
     st.markdown("<br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1.2, 1.8, 1.2])
 
-    with col2:
+   with col2:
+        escolha_tema_login = st.radio(
+            "Tema Visual:",
+            ["Claro (Diurno)", "Escuro (Cockpit)"],
+            index=0 if "Claro" in st.session_state.tema_ui else 1,
+            horizontal=True,
+            label_visibility="collapsed"
+        )
+        if escolha_tema_login != st.session_state.tema_ui:
+            st.session_state.tema_ui = escolha_tema_login
+            st.rerun()
         st.markdown(f"""
         <div style="background: {T['bg_card_grad']}; border: 1px solid {T['border']}; border-top: 4px solid {T['accent']}; border-radius: 14px; padding: 30px 32px; box-shadow: 0 12px 30px rgba(0,0,0,0.12); text-align: center; margin-bottom: 20px;">
             <div style="display: inline-block; background: rgba(29, 78, 216, 0.12); border: 1px solid rgba(29, 78, 216, 0.3); color: {T['accent']}; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; padding: 4px 12px; border-radius: 20px; margin-bottom: 12px;">
