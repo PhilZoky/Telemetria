@@ -42,50 +42,54 @@ def obter_paleta_cores():
     if modo_claro:
         return {
             "modo": "light",
-            "bg_app": "linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%)",
-            "bg_sidebar": "#ffffff",
+            # Fundo Azul-Céu / Aeronáutica Diurno (bem claro e limpo)
+            "bg_solid": "#e6f2ff",
+            "bg_app": "linear-gradient(180deg, #dbeafe 0%, #f0f9ff 45%, #e0f2fe 100%)",
+            "bg_sidebar": "#d9eaff",
             "bg_card": "#ffffff",
-            "bg_card_grad": "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
-            "bg_header": "linear-gradient(90deg, #1e3a8a 0%, #1d4ed8 50%, #1e3a8a 100%)",
+            "bg_card_grad": "linear-gradient(180deg, #ffffff 0%, #f8fbff 100%)",
+            "bg_header": "linear-gradient(90deg, #172554 0%, #1e40af 50%, #1d4ed8 100%)",
             "txt_header": "#ffffff",
-            "sub_header": "#bfdbfe",
-            "bg_badge_header": "rgba(255, 255, 255, 0.15)",
+            "sub_header": "#bae6fd",
+            "bg_badge_header": "rgba(255, 255, 255, 0.16)",
             "bg_input": "#ffffff",
             "txt_main": "#0f172a",
-            "txt_sec": "#475569",
-            "txt_muted": "#64748b",
-            "border": "#cbd5e1",
+            "txt_sec": "#1e3a8a",
+            "txt_muted": "#475569",
+            "border": "#93c5fd",
             "accent": "#1d4ed8",
-            "accent_light": "#2563eb",
+            "accent_light": "#0284c7",
             "plotly_template": "plotly_white",
             "plotly_bg": "#ffffff",
             "map_style": "carto-positron",
-            "tab_bg": "#e2e8f0",
-            "tab_txt": "#334155"
+            "tab_bg": "#cfe3ff",
+            "tab_txt": "#1e3a8a"
         }
     else:
         return {
             "modo": "dark",
-            "bg_app": "radial-gradient(circle at 50% 0%, #0f172a 0%, #070b14 100%)",
-            "bg_sidebar": "#090d16",
-            "bg_card": "#090d16",
-            "bg_card_grad": "linear-gradient(160deg, #0f172a 0%, #090d16 100%)",
-            "bg_header": "linear-gradient(90deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)",
+            # Fundo Azul-Marinho Profundo (Cockpit Azul, zero preto)
+            "bg_solid": "#0b192c",
+            "bg_app": "linear-gradient(180deg, #091526 0%, #0d213a 50%, #0b192c 100%)",
+            "bg_sidebar": "#081220",
+            "bg_card": "#102542",
+            "bg_card_grad": "linear-gradient(160deg, #132c4e 0%, #0d1f38 100%)",
+            "bg_header": "linear-gradient(90deg, #0f294a 0%, #1d4ed8 50%, #0f294a 100%)",
             "txt_header": "#f8fafc",
-            "sub_header": "#94a3b8",
-            "bg_badge_header": "#090d16",
-            "bg_input": "#0f172a",
-            "txt_main": "#f8fafc",
+            "sub_header": "#93c5fd",
+            "bg_badge_header": "rgba(11, 25, 44, 0.65)",
+            "bg_input": "#0f243e",
+            "txt_main": "#f1f5f9",
             "txt_sec": "#cbd5e1",
             "txt_muted": "#94a3b8",
-            "border": "#1e293b",
-            "accent": "#3b82f6",
-            "accent_light": "#38bdf8",
+            "border": "#1e3a5f",
+            "accent": "#38bdf8",
+            "accent_light": "#60a5fa",
             "plotly_template": "plotly_dark",
-            "plotly_bg": "#090d16",
+            "plotly_bg": "#0f243e",
             "map_style": "carto-darkmatter",
-            "tab_bg": "#0f172a",
-            "tab_txt": "#94a3b8"
+            "tab_bg": "#0f243e",
+            "tab_txt": "#cbd5e1"
         }
 
 T = obter_paleta_cores()
@@ -95,21 +99,14 @@ def injetar_estilo_profissional(t):
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap');
 
-        html, body, [class*="css"] {{
+        html, body, [data-testid="stApp"], .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {{
             font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            color: {t['txt_main']};
-        }}
-        
-        /* Fundo Principal da Aplicação (força Light ou Dark sobre o tema do navegador) */
-        .stApp,
-        [data-testid="stAppViewContainer"],
-        [data-testid="stMain"],
-        section.main {{
+            background-color: {t['bg_solid']} !important;
             background: {t['bg_app']} !important;
             color: {t['txt_main']} !important;
         }}
         
-        /* Corrige a faixa preta superior nativa do Streamlit */
+        /* Corrige a barra superior nativa do Streamlit */
         [data-testid="stHeader"] {{
             background-color: transparent !important;
         }}
@@ -125,8 +122,10 @@ def injetar_estilo_profissional(t):
         /* Barra Lateral completa */
         [data-testid="stSidebar"],
         [data-testid="stSidebarContent"],
-        [data-testid="stSidebarUserContent"] {{
+        [data-testid="stSidebarUserContent"],
+        section[data-testid="stSidebar"] > div {{
             background-color: {t['bg_sidebar']} !important;
+            background: {t['bg_sidebar']} !important;
             border-right: 1px solid {t['border']} !important;
         }}
         [data-testid="stSidebar"] * {{
@@ -155,7 +154,7 @@ def injetar_estilo_profissional(t):
             border-radius: 7px;
             padding: 0 20px;
             background-color: transparent !important;
-            color: {t['txt_main']} !important;
+            color: {t['tab_txt']} !important;
             font-weight: 700 !important;
             font-size: 13px;
             letter-spacing: 0.4px;
@@ -163,7 +162,7 @@ def injetar_estilo_profissional(t):
             transition: all 0.2s ease;
         }}
         .stTabs [data-baseweb="tab"] * {{
-            color: {t['txt_main']} !important;
+            color: {t['tab_txt']} !important;
         }}
         .stTabs [aria-selected="true"] {{
             background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
