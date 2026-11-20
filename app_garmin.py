@@ -99,10 +99,16 @@ def injetar_estilo_profissional(t):
             font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             color: {t['txt_main']};
         }}
-        .stApp {{
+        
+        /* Fundo Principal da Aplicação (força Light ou Dark sobre o tema do navegador) */
+        .stApp,
+        [data-testid="stAppViewContainer"],
+        [data-testid="stMain"],
+        section.main {{
             background: {t['bg_app']} !important;
             color: {t['txt_main']} !important;
         }}
+        
         /* Corrige a faixa preta superior nativa do Streamlit */
         [data-testid="stHeader"] {{
             background-color: transparent !important;
@@ -116,8 +122,10 @@ def injetar_estilo_profissional(t):
             max-width: 96% !important;
         }}
 
-        /* Barra Lateral */
-        [data-testid="stSidebar"] {{
+        /* Barra Lateral completa */
+        [data-testid="stSidebar"],
+        [data-testid="stSidebarContent"],
+        [data-testid="stSidebarUserContent"] {{
             background-color: {t['bg_sidebar']} !important;
             border-right: 1px solid {t['border']} !important;
         }}
@@ -128,13 +136,13 @@ def injetar_estilo_profissional(t):
             color: {t['txt_sec']} !important;
         }}
 
-        /* Labels gerais para máxima leitura em monitores de serviço */
+        /* Labels gerais para máxima leitura */
         label, .stMarkdown p, .stRadio label, [data-testid="stWidgetLabel"] p {{
             color: {t['txt_main']} !important;
             font-weight: 600 !important;
         }}
 
-        /* Abas estilo MFD - contraste reforçado nas inativas */
+        /* Abas estilo MFD */
         .stTabs [data-baseweb="tab-list"] {{
             gap: 8px;
             background-color: {t['tab_bg']} !important;
@@ -215,12 +223,13 @@ def injetar_estilo_profissional(t):
             color: #ffffff !important;
         }}
 
-        /* Inputs, TextAreas (Alertas e Parecer) e Selectboxes */
+        /* Inputs, TextAreas, Selectboxes e Expanders */
         .stTextInput > div > div > input,
         .stNumberInput > div > div > input,
         .stTextArea > div > div,
         .stTextArea > div > div > textarea,
-        .stSelectbox > div > div {{
+        .stSelectbox > div > div,
+        [data-baseweb="select"] > div {{
             background-color: {t['bg_input']} !important;
             border: 1px solid {t['border']} !important;
             color: {t['txt_main']} !important;
@@ -229,19 +238,12 @@ def injetar_estilo_profissional(t):
             font-weight: 500 !important;
         }}
 
-        /* Expanders */
+        [data-testid="stExpander"],
         .streamlit-expanderHeader {{
             background-color: {t['bg_card']} !important;
             border: 1px solid {t['border']} !important;
             color: {t['txt_main']} !important;
             border-radius: 8px !important;
-            font-size: 13.5px !important;
-            font-weight: 700 !important;
-        }}
-
-        /* Cabeçalho Principal (força branco dentro do banner azul) */
-        .banner-executivo h1 {{
-            color: {t['txt_header']} !important;
         }}
 
         h1, h2, h3, h4 {{
