@@ -133,30 +133,44 @@ label, .stMarkdown p, .stRadio label, [data-testid="stWidgetLabel"] p {{
     border-radius: 10px;
     border: 1px solid {t['border']} !important;
 }}
-.stTabs [data-baseweb="tab"] {{
+.stTabs button[data-baseweb="tab"],
+.stTabs button[role="tab"] {{
     height: 44px;
     border-radius: 7px;
     padding: 0 20px;
-    background-color: transparent !important;
+    background-color: {t['bg_card']} !important;
+    border: 1px solid {t['border']} !important;
     color: {t['tab_txt']} !important;
+    -webkit-text-fill-color: {t['tab_txt']} !important;
     font-weight: 700 !important;
     font-size: 12.5px;
     letter-spacing: 0.5px;
-    border: none !important;
 }}
-.stTabs [data-baseweb="tab"] * {{
+.stTabs button[data-baseweb="tab"] p,
+.stTabs button[data-baseweb="tab"] span,
+.stTabs button[data-baseweb="tab"] div {{
     color: {t['tab_txt']} !important;
+    -webkit-text-fill-color: {t['tab_txt']} !important;
+    font-weight: 700 !important;
 }}
-.stTabs [aria-selected="true"] {{
+.stTabs button[data-baseweb="tab"][aria-selected="true"],
+.stTabs button[role="tab"][aria-selected="true"] {{
     background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
+    border: 1px solid #1e3a8a !important;
     color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
     box-shadow: 0 4px 10px rgba(29, 78, 216, 0.3);
 }}
-.stTabs [aria-selected="true"] * {{
+.stTabs button[data-baseweb="tab"][aria-selected="true"] p,
+.stTabs button[data-baseweb="tab"][aria-selected="true"] span,
+.stTabs button[data-baseweb="tab"][aria-selected="true"] div {{
     color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
 }}
-.stTabs [data-baseweb="tab-highlight"] {{
+.stTabs [data-baseweb="tab-highlight"],
+.stTabs [data-baseweb="tab-border"] {{
     display: none !important;
+}}
 }}
 .stButton > button, .stDownloadButton > button {{
     background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
