@@ -2,7 +2,6 @@ name: Manter Streamlit Acordado
 
 on:
   schedule:
-    # Executa automaticamente a cada 3 horas
     - cron: '0 */3 * * *'
   workflow_dispatch:
 
@@ -17,16 +16,20 @@ jobs:
 
       - name: Abrir app no navegador real para manter ativo
         run: |
-          python -c "
+          cat << 'EOF' > acordar.py
           from playwright.sync_api import sync_playwright
+
           with sync_playwright() as p:
-              browser = p.chromium.launch()
+              browser = p.chromium.launch(headless=True)
               page = browser.new_page()
-              page.goto('https://telemetria-tofly.streamlit.app/', timeout=60000)
+              page.goto("https://telemetria-tofly.streamlit.app/", timeout=60000)
               page.wait_for_timeout(15000)
-              botao_acordar = page.locator('button:has-text(\"Yes, get this app back up\")')
-              if botao_acordar.count() > 0:
-                  botao_acordar.click()
+              
+              botao = page.locator("button:has-text('Yes, get this app back up')")
+              if botao.count() > 0:
+                  botao.click()
                   page.wait_for_timeout(30000)
+                  
               browser.close()
-          "
+          EOF
+          python acordar.py
