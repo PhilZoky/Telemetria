@@ -95,168 +95,135 @@ def obter_paleta_cores():
 T = obter_paleta_cores()
 
 def injetar_estilo_profissional(t):
-    st.markdown(f"""
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap');
-
-        html, body, [data-testid="stApp"], .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {{
-            font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: {t['bg_solid']} !important;
-            background: {t['bg_app']} !important;
-            color: {t['txt_main']} !important;
-        }}
-        
-        /* Corrige a barra superior nativa do Streamlit */
-        [data-testid="stHeader"] {{
-            background-color: transparent !important;
-        }}
-        [data-testid="stToolbar"] {{
-            right: 1rem !important;
-        }}
-        .block-container {{
-            padding-top: 3.2rem !important;
-            padding-bottom: 3rem !important;
-            max-width: 96% !important;
-        }}
-
-        /* Barra Lateral completa */
-        [data-testid="stSidebar"],
-        [data-testid="stSidebarContent"],
-        [data-testid="stSidebarUserContent"],
-        section[data-testid="stSidebar"] > div {{
-            background-color: {t['bg_sidebar']} !important;
-            background: {t['bg_sidebar']} !important;
-            border-right: 1px solid {t['border']} !important;
-        }}
-        [data-testid="stSidebar"] * {{
-            color: {t['txt_main']} !important;
-        }}
-        [data-testid="stSidebar"] .stCaption {{
-            color: {t['txt_sec']} !important;
-        }}
-
-        /* Labels gerais para máxima leitura */
-        label, .stMarkdown p, .stRadio label, [data-testid="stWidgetLabel"] p {{
-            color: {t['txt_main']} !important;
-            font-weight: 600 !important;
-        }}
-
-        /* Abas estilo MFD */
-        .stTabs [data-baseweb="tab-list"] {{
-            gap: 8px;
-            background-color: {t['tab_bg']} !important;
-            padding: 6px;
-            border-radius: 10px;
-            border: 1px solid {t['border']} !important;
-        }}
-        .stTabs [data-baseweb="tab"] {{
-            height: 44px;
-            border-radius: 7px;
-            padding: 0 20px;
-            background-color: transparent !important;
-            color: {t['tab_txt']} !important;
-            font-weight: 700 !important;
-            font-size: 13px;
-            letter-spacing: 0.4px;
-            border: none !important;
-            transition: all 0.2s ease;
-        }}
-        .stTabs [data-baseweb="tab"] * {{
-            color: {t['tab_txt']} !important;
-        }}
-        .stTabs [aria-selected="true"] {{
-            background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
-            color: #ffffff !important;
-            box-shadow: 0 4px 10px rgba(29, 78, 216, 0.3);
-        }}
-        .stTabs [aria-selected="true"] * {{
-            color: #ffffff !important;
-        }}
-
-        /* Botões Principais */
-        .stButton > button, .stDownloadButton > button {{
-            background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
-            color: #ffffff !important;
-            border: 1px solid #1e3a8a !important;
-            border-radius: 8px;
-            padding: 0.55rem 1.2rem;
-            font-weight: 600;
-            font-size: 13.5px;
-            letter-spacing: 0.3px;
-            transition: all 0.2s ease;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-        }}
-        .stButton > button *, .stDownloadButton > button * {{
-            color: #ffffff !important;
-        }}
-        .stButton > button:hover, .stDownloadButton > button:hover {{
-            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
-        }}
-
-        /* File Uploader e etiqueta do arquivo carregado */
-        [data-testid="stFileUploader"] {{
-            background-color: {t['bg_card']} !important;
-            border: 2px dashed {t['accent']} !important;
-            border-radius: 12px;
-            padding: 16px;
-        }}
-        [data-testid="stFileUploader"] section,
-        [data-testid="stFileUploaderFile"] {{
-            background-color: {t['bg_input']} !important;
-            color: {t['txt_main']} !important;
-            border: 1px solid {t['border']} !important;
-            border-radius: 8px;
-        }}
-        [data-testid="stFileUploader"] section *,
-        [data-testid="stFileUploaderFile"] * {{
-            color: {t['txt_main']} !important;
-        }}
-        [data-testid="stFileUploader"] button {{
-            background-color: {t['accent']} !important;
-            color: #ffffff !important;
-            border: none !important;
-        }}
-        [data-testid="stFileUploader"] button * {{
-            color: #ffffff !important;
-        }}
-
-        /* Inputs, TextAreas, Selectboxes e Expanders */
-        .stTextInput > div > div > input,
-        .stNumberInput > div > div > input,
-        .stTextArea > div > div,
-        .stTextArea > div > div > textarea,
-        .stSelectbox > div > div,
-        [data-baseweb="select"] > div {{
-            background-color: {t['bg_input']} !important;
-            border: 1px solid {t['border']} !important;
-            color: {t['txt_main']} !important;
-            -webkit-text-fill-color: {t['txt_main']} !important;
-            border-radius: 8px !important;
-            font-weight: 500 !important;
-        }}
-
-        [data-testid="stExpander"],
-        .streamlit-expanderHeader {{
-            background-color: {t['bg_card']} !important;
-            border: 1px solid {t['border']} !important;
-            color: {t['txt_main']} !important;
-            border-radius: 8px !important;
-        }}
-
-        h1, h2, h3, h4 {{
-            color: {t['txt_main']} !important;
-            letter-spacing: -0.3px;
-            font-weight: 700 !important;
-        }}
-        hr {{
-            border-color: {t['border']} !important;
-            margin: 1.6rem 0 !important;
-        }}
-    </style>
-    """, unsafe_allow_html=True)
-
+    css = f"""<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap');
+html, body, [data-testid="stApp"], .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {{
+    font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background-color: {t['bg_solid']} !important;
+    background: {t['bg_app']} !important;
+    color: {t['txt_main']} !important;
+}}
+[data-testid="stHeader"] {{
+    background-color: transparent !important;
+}}
+[data-testid="stToolbar"] {{
+    right: 1rem !important;
+}}
+.block-container {{
+    padding-top: 3.2rem !important;
+    padding-bottom: 3rem !important;
+    max-width: 96% !important;
+}}
+[data-testid="stSidebar"], [data-testid="stSidebarContent"], [data-testid="stSidebarUserContent"], section[data-testid="stSidebar"] > div {{
+    background-color: {t['bg_sidebar']} !important;
+    background: {t['bg_sidebar']} !important;
+    border-right: 1px solid {t['border']} !important;
+}}
+[data-testid="stSidebar"] * {{
+    color: {t['txt_main']} !important;
+}}
+[data-testid="stSidebar"] .stCaption {{
+    color: {t['txt_sec']} !important;
+}}
+label, .stMarkdown p, .stRadio label, [data-testid="stWidgetLabel"] p {{
+    color: {t['txt_main']} !important;
+    font-weight: 600 !important;
+}}
+.stTabs [data-baseweb="tab-list"] {{
+    gap: 8px;
+    background-color: {t['tab_bg']} !important;
+    padding: 6px;
+    border-radius: 10px;
+    border: 1px solid {t['border']} !important;
+}}
+.stTabs [data-baseweb="tab"] {{
+    height: 44px;
+    border-radius: 7px;
+    padding: 0 20px;
+    background-color: transparent !important;
+    color: {t['tab_txt']} !important;
+    font-weight: 700 !important;
+    font-size: 13px;
+    border: none !important;
+}}
+.stTabs [data-baseweb="tab"] * {{
+    color: {t['tab_txt']} !important;
+}}
+.stTabs [aria-selected="true"] {{
+    background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 10px rgba(29, 78, 216, 0.3);
+}}
+.stTabs [aria-selected="true"] * {{
+    color: #ffffff !important;
+}}
+.stTabs [data-baseweb="tab-highlight"] {{
+    display: none !important;
+}}
+.stButton > button, .stDownloadButton > button {{
+    background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
+    color: #ffffff !important;
+    border: 1px solid #1e3a8a !important;
+    border-radius: 8px !important;
+    padding: 0.55rem 1.2rem !important;
+    font-weight: 600 !important;
+    font-size: 13.5px !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15) !important;
+}}
+.stButton > button *, .stDownloadButton > button * {{
+    color: #ffffff !important;
+}}
+.stButton > button:hover, .stDownloadButton > button:hover {{
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+    transform: translateY(-1px);
+}}
+[data-testid="stFileUploader"] {{
+    background-color: {t['bg_card']} !important;
+    border: 2px dashed {t['accent']} !important;
+    border-radius: 12px;
+    padding: 16px;
+}}
+[data-testid="stFileUploader"] section, [data-testid="stFileUploaderFile"] {{
+    background-color: {t['bg_input']} !important;
+    color: {t['txt_main']} !important;
+    border: 1px solid {t['border']} !important;
+    border-radius: 8px;
+}}
+[data-testid="stFileUploader"] section *, [data-testid="stFileUploaderFile"] * {{
+    color: {t['txt_main']} !important;
+}}
+[data-testid="stFileUploader"] button {{
+    background-color: {t['accent']} !important;
+    color: #ffffff !important;
+    border: none !important;
+}}
+[data-testid="stFileUploader"] button * {{
+    color: #ffffff !important;
+}}
+.stTextInput > div > div > input, .stNumberInput > div > div > input, .stTextArea > div > div, .stTextArea > div > div > textarea, .stSelectbox > div > div, [data-baseweb="select"] > div {{
+    background-color: {t['bg_input']} !important;
+    border: 1px solid {t['border']} !important;
+    color: {t['txt_main']} !important;
+    -webkit-text-fill-color: {t['txt_main']} !important;
+    border-radius: 8px !important;
+    font-weight: 500 !important;
+}}
+[data-testid="stExpander"], .streamlit-expanderHeader {{
+    background-color: {t['bg_card']} !important;
+    border: 1px solid {t['border']} !important;
+    color: {t['txt_main']} !important;
+    border-radius: 8px !important;
+}}
+h1, h2, h3, h4 {{
+    color: {t['txt_main']} !important;
+    font-weight: 700 !important;
+}}
+hr {{
+    border-color: {t['border']} !important;
+    margin: 1.6rem 0 !important;
+}}
+</style>"""
+    st.markdown(css, unsafe_allow_html=True)
 
 # ==========================================
 # CONFIGURAÇÃO DA INTELIGÊNCIA ARTIFICIAL
