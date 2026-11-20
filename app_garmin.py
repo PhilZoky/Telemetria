@@ -126,55 +126,49 @@ label, .stMarkdown p, .stRadio label, [data-testid="stWidgetLabel"] p {{
     color: {t['txt_main']} !important;
     font-weight: 600 !important;
 }}
-.stTabs [data-baseweb="tab-list"] {{
+/* Abas 100% legíveis em qualquer combinação (Light/Dark) */
+div[data-baseweb="tab-list"] {{
     gap: 8px;
     background-color: {t['tab_bg']} !important;
     padding: 6px;
     border-radius: 10px;
     border: 1px solid {t['border']} !important;
 }}
-.stTabs button[data-baseweb="tab"],
-.stTabs button[role="tab"] {{
-    height: 44px;
-    border-radius: 7px;
-    padding: 0 20px;
+button[data-baseweb="tab"], button[role="tab"] {{
+    height: 44px !important;
+    border-radius: 7px !important;
+    padding: 0 20px !important;
     background-color: {t['bg_card']} !important;
     border: 1px solid {t['border']} !important;
     color: {t['tab_txt']} !important;
     -webkit-text-fill-color: {t['tab_txt']} !important;
     font-weight: 700 !important;
-    font-size: 12.5px;
+    font-size: 12.5px !important;
     letter-spacing: 0.5px;
 }}
-.stTabs button[data-baseweb="tab"] p,
-.stTabs button[data-baseweb="tab"] span,
-.stTabs button[data-baseweb="tab"] div {{
+button[data-baseweb="tab"] *, button[role="tab"] * {{
     color: {t['tab_txt']} !important;
     -webkit-text-fill-color: {t['tab_txt']} !important;
-    font-weight: 700 !important;
 }}
-.stTabs button[data-baseweb="tab"][aria-selected="true"],
-.stTabs button[role="tab"][aria-selected="true"] {{
+button[data-baseweb="tab"][aria-selected="true"], button[role="tab"][aria-selected="true"] {{
     background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
     border: 1px solid #1e3a8a !important;
     color: #ffffff !important;
     -webkit-text-fill-color: #ffffff !important;
     box-shadow: 0 4px 10px rgba(29, 78, 216, 0.3);
 }}
-.stTabs button[data-baseweb="tab"][aria-selected="true"] p,
-.stTabs button[data-baseweb="tab"][aria-selected="true"] span,
-.stTabs button[data-baseweb="tab"][aria-selected="true"] div {{
+button[data-baseweb="tab"][aria-selected="true"] *, button[role="tab"][aria-selected="true"] * {{
     color: #ffffff !important;
     -webkit-text-fill-color: #ffffff !important;
 }}
-.stTabs [data-baseweb="tab-highlight"],
-.stTabs [data-baseweb="tab-border"] {{
+div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] {{
     display: none !important;
 }}
-}}
+/* Botões Principais */
 .stButton > button, .stDownloadButton > button {{
     background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
     color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
     border: 1px solid #1e3a8a !important;
     border-radius: 8px !important;
     padding: 0.55rem 1.2rem !important;
@@ -185,11 +179,13 @@ label, .stMarkdown p, .stRadio label, [data-testid="stWidgetLabel"] p {{
 }}
 .stButton > button *, .stDownloadButton > button * {{
     color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
 }}
 .stButton > button:hover, .stDownloadButton > button:hover {{
     background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
     transform: translateY(-1px);
 }}
+/* File Uploader */
 [data-testid="stFileUploader"] {{
     background-color: {t['bg_card']} !important;
     border: 1.5px dashed {t['accent']} !important;
@@ -213,13 +209,19 @@ label, .stMarkdown p, .stRadio label, [data-testid="stWidgetLabel"] p {{
 [data-testid="stFileUploader"] button * {{
     color: #ffffff !important;
 }}
-.stTextInput > div > div > input, .stNumberInput > div > div > input, .stTextArea > div > div, .stTextArea > div > div > textarea, .stSelectbox > div > div, [data-baseweb="select"] > div {{
+/* Inputs, Senha, Autofill do Navegador e Selectboxes */
+.stTextInput > div > div, .stTextInput > div > div > input, .stNumberInput > div > div > input, .stTextArea > div > div, .stTextArea > div > div > textarea, .stSelectbox > div > div, [data-baseweb="select"] > div {{
     background-color: {t['bg_input']} !important;
-    border: 1px solid {t['border']} !important;
+    border-color: {t['border']} !important;
     color: {t['txt_main']} !important;
     -webkit-text-fill-color: {t['txt_main']} !important;
     border-radius: 8px !important;
     font-weight: 500 !important;
+}}
+input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus, input:-webkit-autofill:active {{
+    -webkit-box-shadow: 0 0 0 1000px {t['bg_input']} inset !important;
+    -webkit-text-fill-color: {t['txt_main']} !important;
+    transition: background-color 5000s ease-in-out 0s;
 }}
 [data-testid="stExpander"], .streamlit-expanderHeader {{
     background-color: {t['bg_card']} !important;
