@@ -104,7 +104,6 @@ def injetar_estilo_profissional(t):
             color: {t['txt_main']} !important;
         }}
         /* Corrige a faixa preta superior nativa do Streamlit */
-       /* Corrige a faixa preta superior nativa do Streamlit */
         [data-testid="stHeader"] {{
             background-color: transparent !important;
         }}
@@ -135,25 +134,28 @@ def injetar_estilo_profissional(t):
             font-weight: 600 !important;
         }}
 
-        /* Abas estilo MFD */
+        /* Abas estilo MFD - contraste reforçado nas inativas */
         .stTabs [data-baseweb="tab-list"] {{
             gap: 8px;
-            background-color: {t['tab_bg']};
+            background-color: {t['tab_bg']} !important;
             padding: 6px;
             border-radius: 10px;
-            border: 1px solid {t['border']};
+            border: 1px solid {t['border']} !important;
         }}
         .stTabs [data-baseweb="tab"] {{
             height: 44px;
             border-radius: 7px;
             padding: 0 20px;
-            background-color: transparent;
-            color: {t['tab_txt']} !important;
-            font-weight: 700;
+            background-color: transparent !important;
+            color: {t['txt_main']} !important;
+            font-weight: 700 !important;
             font-size: 13px;
             letter-spacing: 0.4px;
             border: none !important;
             transition: all 0.2s ease;
+        }}
+        .stTabs [data-baseweb="tab"] * {{
+            color: {t['txt_main']} !important;
         }}
         .stTabs [aria-selected="true"] {{
             background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
@@ -186,20 +188,22 @@ def injetar_estilo_profissional(t):
             box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
         }}
 
-        /* File Uploader corrigido para não estourar branco no modo Dark nem sumir no Light */
+        /* File Uploader e etiqueta do arquivo carregado */
         [data-testid="stFileUploader"] {{
             background-color: {t['bg_card']} !important;
             border: 2px dashed {t['accent']} !important;
             border-radius: 12px;
             padding: 16px;
         }}
-        [data-testid="stFileUploader"] section {{
+        [data-testid="stFileUploader"] section,
+        [data-testid="stFileUploaderFile"] {{
             background-color: {t['bg_input']} !important;
             color: {t['txt_main']} !important;
             border: 1px solid {t['border']} !important;
             border-radius: 8px;
         }}
-        [data-testid="stFileUploader"] section * {{
+        [data-testid="stFileUploader"] section *,
+        [data-testid="stFileUploaderFile"] * {{
             color: {t['txt_main']} !important;
         }}
         [data-testid="stFileUploader"] button {{
@@ -211,14 +215,16 @@ def injetar_estilo_profissional(t):
             color: #ffffff !important;
         }}
 
-        /* Inputs, TextAreas e Selectboxes */
+        /* Inputs, TextAreas (Alertas e Parecer) e Selectboxes */
         .stTextInput > div > div > input,
         .stNumberInput > div > div > input,
+        .stTextArea > div > div,
         .stTextArea > div > div > textarea,
         .stSelectbox > div > div {{
             background-color: {t['bg_input']} !important;
             border: 1px solid {t['border']} !important;
             color: {t['txt_main']} !important;
+            -webkit-text-fill-color: {t['txt_main']} !important;
             border-radius: 8px !important;
             font-weight: 500 !important;
         }}
@@ -233,6 +239,11 @@ def injetar_estilo_profissional(t):
             font-weight: 700 !important;
         }}
 
+        /* Cabeçalho Principal (força branco dentro do banner azul) */
+        .banner-executivo h1 {{
+            color: {t['txt_header']} !important;
+        }}
+
         h1, h2, h3, h4 {{
             color: {t['txt_main']} !important;
             letter-spacing: -0.3px;
@@ -244,8 +255,6 @@ def injetar_estilo_profissional(t):
         }}
     </style>
     """, unsafe_allow_html=True)
-
-injetar_estilo_profissional(T)
 
 
 # ==========================================
