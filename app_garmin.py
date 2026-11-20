@@ -103,8 +103,15 @@ def injetar_estilo_profissional(t):
             background: {t['bg_app']} !important;
             color: {t['txt_main']} !important;
         }}
+        /* Corrige a faixa preta superior nativa do Streamlit */
+        [data-testid="stHeader"] {
+            background-color: transparent !important;
+        }
+        [data-testid="stToolbar"] {
+            right: 1rem !important;
+        }
         .block-container {{
-            padding-top: 1.8rem !important;
+            padding-top: 3.2rem !important;
             padding-bottom: 3rem !important;
             max-width: 96% !important;
         }}
