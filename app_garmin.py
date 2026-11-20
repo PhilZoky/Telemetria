@@ -93,6 +93,7 @@ T = obter_paleta_cores()
 
 def injetar_estilo_profissional(t):
     esquema_cor = "light" if t['modo'] == 'light' else "dark"
+    cor_texto_abas = "#000000" if t['modo'] == 'light' else "#ffffff"
     css = f"""<style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap');
 
@@ -257,6 +258,29 @@ h1, h2, h3, h4 {{
 hr {{
     border-color: {t['border']} !important;
     margin: 1.4rem 0 !important;
+}}
+/* Força o texto de todas as abas (Login e Painel) para PRETO no Light e BRANCO no Dark */
+button[data-baseweb="tab"],
+button[data-baseweb="tab"] p,
+button[data-baseweb="tab"] span,
+button[data-baseweb="tab"] div,
+button[role="tab"],
+button[role="tab"] p,
+button[role="tab"] span,
+button[role="tab"] div {{
+    color: {cor_texto_abas} !important;
+    -webkit-text-fill-color: {cor_texto_abas} !important;
+    font-weight: 700 !important;
+}}
+
+/* Força o texto e a setinha do Perfil de Envelope escolhido para BRANCO */
+section[data-testid="stSidebar"] [data-baseweb="select"] *,
+section[data-testid="stSidebar"] [data-baseweb="select"] div,
+section[data-testid="stSidebar"] [data-baseweb="select"] span,
+section[data-testid="stSidebar"] [data-baseweb="select"] svg {{
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    fill: #ffffff !important;
 }}
 </style>"""
     st.html(css)
