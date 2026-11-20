@@ -104,12 +104,13 @@ def injetar_estilo_profissional(t):
             color: {t['txt_main']} !important;
         }}
         /* Corrige a faixa preta superior nativa do Streamlit */
-        [data-testid="stHeader"] {
+       /* Corrige a faixa preta superior nativa do Streamlit */
+        [data-testid="stHeader"] {{
             background-color: transparent !important;
-        }
-        [data-testid="stToolbar"] {
+        }}
+        [data-testid="stToolbar"] {{
             right: 1rem !important;
-        }
+        }}
         .block-container {{
             padding-top: 3.2rem !important;
             padding-bottom: 3rem !important;
