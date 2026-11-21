@@ -285,6 +285,58 @@ hr {{
 </style>"""
     st.markdown(css, unsafe_allow_html=True)
 
+        if t['modo'] == 'light':
+        st.markdown("""<style>
+/* 1. Etiqueta do arquivo .CSV carregado (fundo branco + texto escuro) */
+[data-testid="stFileUploaderFile"],
+[data-testid="stFileUploaderFile"] > div,
+[data-testid="stFileUploader"] ul li,
+[data-testid="stFileUploader"] [role="listitem"] {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    border: 1px solid #93c5fd !important;
+    border-radius: 8px !important;
+}
+[data-testid="stFileUploaderFile"] *,
+[data-testid="stFileUploader"] ul li * {
+    color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+}
+
+/* 2. Seletor Perfil de Envelope e demais selectboxes (fundo branco + texto escuro) */
+[data-testid="stSelectbox"] [data-baseweb="select"] > div,
+section[data-testid="stSidebar"] [data-baseweb="select"] > div {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    border: 1px solid #93c5fd !important;
+    border-radius: 8px !important;
+}
+[data-testid="stSelectbox"] [data-baseweb="select"] *,
+section[data-testid="stSidebar"] [data-baseweb="select"] * {
+    color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+    fill: #0f172a !important;
+}
+
+/* 3. Caixas de comentários, alertas e parecer técnico em todas as abas (fundo branco + texto escuro) */
+[data-testid="stTextArea"] [data-baseweb="textarea"],
+[data-testid="stTextArea"] [data-baseweb="base-input"],
+[data-testid="stTextArea"] textarea,
+textarea {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+    caret-color: #0f172a !important;
+    border-color: #93c5fd !important;
+    border-radius: 8px !important;
+}
+[data-testid="InputInstructions"] {
+    color: #475569 !important;
+    -webkit-text-fill-color: #475569 !important;
+}
+</style>""", unsafe_allow_html=True)
+
 injetar_estilo_profissional(T)
 
 
