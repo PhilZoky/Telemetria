@@ -285,7 +285,7 @@ hr {{
 </style>"""
     st.markdown(css, unsafe_allow_html=True)
 
-        if t['modo'] == 'light':
+    if t['modo'] == 'light':
         st.markdown("""<style>
 /* 1. Etiqueta do arquivo .CSV carregado (fundo branco + texto escuro) */
 [data-testid="stFileUploaderFile"],
