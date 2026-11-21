@@ -287,35 +287,36 @@ hr {{
 
     if t['modo'] == 'light':
         st.markdown("""<style>
-/* 1. Etiqueta do arquivo .CSV carregado (fundo branco + texto escuro) */
+/* 1. Etiqueta do arquivo .CSV (todas as camadas internas em branco) */
 [data-testid="stFileUploaderFile"],
-[data-testid="stFileUploaderFile"] > div,
+[data-testid="stFileUploaderFile"] div,
+[data-testid="stFileUploaderFileData"],
 [data-testid="stFileUploader"] ul li,
-[data-testid="stFileUploader"] [role="listitem"] {
+[data-testid="stFileUploader"] ul li div {
     background-color: #ffffff !important;
     background: #ffffff !important;
-    border: 1px solid #93c5fd !important;
-    border-radius: 8px !important;
-}
-[data-testid="stFileUploaderFile"] *,
-[data-testid="stFileUploader"] ul li * {
     color: #0f172a !important;
     -webkit-text-fill-color: #0f172a !important;
+}
+[data-testid="stFileUploaderFile"] {
+    border: 1px solid #93c5fd !important;
+    border-radius: 8px !important;
+    padding: 4px 8px !important;
 }
 
-/* 2. Seletor Perfil de Envelope e demais selectboxes (fundo branco + texto escuro) */
-[data-testid="stSelectbox"] [data-baseweb="select"] > div,
-section[data-testid="stSidebar"] [data-baseweb="select"] > div {
+/* 2. Caixa Perfil de Envelope (todas as camadas internas em branco) */
+section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"],
+section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] > div,
+section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] > div > div {
     background-color: #ffffff !important;
     background: #ffffff !important;
-    border: 1px solid #93c5fd !important;
-    border-radius: 8px !important;
-}
-[data-testid="stSelectbox"] [data-baseweb="select"] *,
-section[data-testid="stSidebar"] [data-baseweb="select"] * {
+    border-color: #93c5fd !important;
     color: #0f172a !important;
     -webkit-text-fill-color: #0f172a !important;
+}
+section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] svg {
     fill: #0f172a !important;
+    color: #0f172a !important;
 }
 
 /* 3. Caixas de comentários, alertas e parecer técnico em todas as abas (fundo branco + texto escuro) */
