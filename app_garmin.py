@@ -282,6 +282,7 @@ section[data-testid="stSidebar"] [data-baseweb="select"] svg {{
     -webkit-text-fill-color: #ffffff !important;
     fill: #ffffff !important;
 }}
+
 </style>"""
     st.html(css)
 injetar_estilo_profissional(T)
