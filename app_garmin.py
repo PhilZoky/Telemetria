@@ -93,6 +93,7 @@ T = obter_paleta_cores()
 
 def injetar_estilo_profissional(t):
     esquema_cor = "light" if t['modo'] == 'light' else "dark"
+    bg_barra_abas = t['bg_header'] if t['modo'] == 'light' else t['tab_bg']
     cor_aba_txt = "#000000" if t['modo'] == 'light' else "#ffffff"
     css = f"""<style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap');
@@ -140,8 +141,8 @@ label, .stMarkdown p, .stRadio label, [data-testid="stWidgetLabel"] p {{
 .stTabs [data-baseweb="tab-list"],
 div[role="tablist"] {{
     gap: 8px !important;
-    background-color: {t['tab_bg']} !important;
-    padding: 6px !important;
+    background: {bg_barra_abas} !important;
+    padding: 8px 10px !important;
     border-radius: 10px !important;
     border: 1px solid {t['border']} !important;
 }}
