@@ -24,7 +24,7 @@ except ImportError:
     genai = None
 
 # ==========================================
-# CONFIGURAÇÃO DA PÁGINA E PALETA AERONÁUTICA (LIGHT / DARK)
+# CONFIGURAÇÃO DA PÁGINA E PALETA AERONÁUTICA
 # ==========================================
 st.set_page_config(
     page_title="AeroTelemetry | Flight Data Monitoring",
@@ -61,7 +61,7 @@ def obter_paleta_cores():
             "plotly_bg": "#ffffff",
             "map_style": "carto-positron",
             "tab_bg": "#cfe3ff",
-            "tab_txt": "#1e3a8a"
+            "tab_txt": "#000000"
         }
     else:
         return {
@@ -86,17 +86,16 @@ def obter_paleta_cores():
             "plotly_bg": "#0f243e",
             "map_style": "carto-darkmatter",
             "tab_bg": "#0f243e",
-            "tab_txt": "#cbd5e1"
+            "tab_txt": "#ffffff"
         }
 
 T = obter_paleta_cores()
 
 def injetar_estilo_profissional(t):
     esquema_cor = "light" if t['modo'] == 'light' else "dark"
-    cor_texto_abas = "#000000" if t['modo'] == 'light' else "#ffffff"
+    cor_aba_txt = "#000000" if t['modo'] == 'light' else "#ffffff"
     css = f"""<style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap');
-
 :root, html, body, [data-testid="stApp"] {{
     color-scheme: {esquema_cor} !important;
     --primary-color: {t['accent']} !important;
@@ -104,14 +103,12 @@ def injetar_estilo_profissional(t):
     --secondary-background-color: {t['bg_sidebar']} !important;
     --text-color: {t['txt_main']} !important;
 }}
-
 html, body, [data-testid="stApp"], .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {{
     font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     background-color: {t['bg_solid']} !important;
     background: {t['bg_app']} !important;
     color: {t['txt_main']} !important;
 }}
-
 #MainMenu, [data-testid="stToolbar"], [data-testid="stDecoration"], footer {{
     display: none !important;
     visibility: hidden !important;
@@ -124,8 +121,6 @@ html, body, [data-testid="stApp"], .stApp, [data-testid="stAppViewContainer"], [
     padding-bottom: 3rem !important;
     max-width: 96% !important;
 }}
-
-/* Barra Lateral forçada */
 html body section[data-testid="stSidebar"],
 html body section[data-testid="stSidebar"] > div,
 html body [data-testid="stSidebarContent"],
@@ -137,13 +132,11 @@ html body [data-testid="stSidebarUserContent"] {{
 html body section[data-testid="stSidebar"] * {{
     color: {t['txt_main']} !important;
 }}
-
 label, .stMarkdown p, .stRadio label, [data-testid="stWidgetLabel"] p {{
     color: {t['txt_main']} !important;
     font-weight: 600 !important;
 }}
-
-/* Abas forçadas (Light e Dark) */
+/* Abas: texto PRETO no Light e BRANCO no Dark */
 .stTabs [data-baseweb="tab-list"],
 div[role="tablist"] {{
     gap: 8px !important;
@@ -153,36 +146,54 @@ div[role="tablist"] {{
     border: 1px solid {t['border']} !important;
 }}
 .stTabs button[data-baseweb="tab"],
-div[role="tablist"] button[role="tab"] {{
+div[role="tablist"] button[role="tab"],
+button[data-baseweb="tab"],
+button[role="tab"] {{
     height: 42px !important;
     border-radius: 7px !important;
     padding: 0 18px !important;
     background-color: {t['bg_card']} !important;
     border: 1px solid {t['border']} !important;
-}}
-.stTabs button[data-baseweb="tab"] *,
-div[role="tablist"] button[role="tab"] * {{
-    color: {t['tab_txt']} !important;
-    -webkit-text-fill-color: {t['tab_txt']} !important;
+    color: {cor_aba_txt} !important;
+    -webkit-text-fill-color: {cor_aba_txt} !important;
     font-weight: 700 !important;
     font-size: 12.5px !important;
 }}
+.stTabs button[data-baseweb="tab"] *,
+div[role="tablist"] button[role="tab"] *,
+button[data-baseweb="tab"] p,
+button[data-baseweb="tab"] span,
+button[data-baseweb="tab"] div,
+button[role="tab"] p,
+button[role="tab"] span,
+button[role="tab"] div {{
+    color: {cor_aba_txt} !important;
+    -webkit-text-fill-color: {cor_aba_txt} !important;
+    font-weight: 700 !important;
+}}
 .stTabs button[data-baseweb="tab"][aria-selected="true"],
-div[role="tablist"] button[role="tab"][aria-selected="true"] {{
+div[role="tablist"] button[role="tab"][aria-selected="true"],
+button[data-baseweb="tab"][aria-selected="true"],
+button[role="tab"][aria-selected="true"] {{
     background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
     border: 1px solid #1e3a8a !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
 }}
 .stTabs button[data-baseweb="tab"][aria-selected="true"] *,
-div[role="tablist"] button[role="tab"][aria-selected="true"] * {{
+div[role="tablist"] button[role="tab"][aria-selected="true"] *,
+button[data-baseweb="tab"][aria-selected="true"] p,
+button[role="tab"][aria-selected="true"] p {{
     color: #ffffff !important;
     -webkit-text-fill-color: #ffffff !important;
 }}
 .stTabs [data-baseweb="tab-highlight"],
-.stTabs [data-baseweb="tab-border"] {{
+.stTabs [data-baseweb="tab-border"],
+div[data-baseweb="tab-highlight"],
+div[data-baseweb="tab-border"] {{
     display: none !important;
 }}
-
-/* Botões */
+/* Botões Principais */
 .stButton > button, .stDownloadButton > button {{
     background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
     color: #ffffff !important;
@@ -197,8 +208,7 @@ div[role="tablist"] button[role="tab"][aria-selected="true"] * {{
     color: #ffffff !important;
     -webkit-text-fill-color: #ffffff !important;
 }}
-
-/* File Uploader e etiqueta do arquivo */
+/* File Uploader */
 [data-testid="stFileUploader"] {{
     background-color: {t['bg_card']} !important;
     border: 1.5px dashed {t['accent']} !important;
@@ -227,12 +237,25 @@ div[role="tablist"] button[role="tab"][aria-selected="true"] * {{
 [data-testid="stFileUploader"] button * {{
     color: #ffffff !important;
     -webkit-text-fill-color: #ffffff !important;
-
-/* Inputs, Senha, Autofill e Selectboxes */
+}}
+/* Perfil de Envelope na barra lateral: fundo azul-marinho e texto BRANCO */
+section[data-testid="stSidebar"] [data-baseweb="select"] > div {{
+    background-color: #1e3a8a !important;
+    border: 1px solid #1d4ed8 !important;
+    border-radius: 8px !important;
+}}
+section[data-testid="stSidebar"] [data-baseweb="select"] *,
+section[data-testid="stSidebar"] [data-baseweb="select"] div,
+section[data-testid="stSidebar"] [data-baseweb="select"] span,
+section[data-testid="stSidebar"] [data-baseweb="select"] svg {{
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    fill: #ffffff !important;
+}}
+/* Inputs, Senha, Autofill e TextAreas */
 .stTextInput > div > div, .stTextInput > div > div > input,
 .stNumberInput > div > div > input,
-.stTextArea > div > div, .stTextArea > div > div > textarea,
-.stSelectbox > div > div, [data-baseweb="select"] > div {{
+.stTextArea > div > div, .stTextArea > div > div > textarea {{
     background-color: {t['bg_input']} !important;
     border-color: {t['border']} !important;
     color: {t['txt_main']} !important;
@@ -244,7 +267,6 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
     -webkit-box-shadow: 0 0 0 1000px {t['bg_input']} inset !important;
     -webkit-text-fill-color: {t['txt_main']} !important;
 }}
-
 [data-testid="stExpander"], .streamlit-expanderHeader {{
     background-color: {t['bg_card']} !important;
     border: 1px solid {t['border']} !important;
@@ -259,32 +281,9 @@ hr {{
     border-color: {t['border']} !important;
     margin: 1.4rem 0 !important;
 }}
-/* Força o texto de todas as abas (Login e Painel) para PRETO no Light e BRANCO no Dark */
-button[data-baseweb="tab"],
-button[data-baseweb="tab"] p,
-button[data-baseweb="tab"] span,
-button[data-baseweb="tab"] div,
-button[role="tab"],
-button[role="tab"] p,
-button[role="tab"] span,
-button[role="tab"] div {{
-    color: {cor_texto_abas} !important;
-    -webkit-text-fill-color: {cor_texto_abas} !important;
-    font-weight: 700 !important;
-}}
-
-/* Força o texto e a setinha do Perfil de Envelope escolhido para BRANCO */
-section[data-testid="stSidebar"] [data-baseweb="select"] *,
-section[data-testid="stSidebar"] [data-baseweb="select"] div,
-section[data-testid="stSidebar"] [data-baseweb="select"] span,
-section[data-testid="stSidebar"] [data-baseweb="select"] svg {{
-    color: #ffffff !important;
-    -webkit-text-fill-color: #ffffff !important;
-    fill: #ffffff !important;
-}}
-
 </style>"""
-    st.html(css)
+    st.markdown(css, unsafe_allow_html=True)
+
 injetar_estilo_profissional(T)
 
 
@@ -394,7 +393,7 @@ def gerar_texto_ia(prompt_texto):
 
 
 # ==========================================
-# 0. SISTEMA DE AUTENTICAÇÃO (LOGIN LIMPO)
+# 0. SISTEMA DE AUTENTICAÇÃO
 # ==========================================
 ARQUIVO_USUARIOS = "banco_usuarios.json"
 
@@ -443,6 +442,7 @@ if st.session_state.usuario_logado is None:
         if escolha_tema_login != st.session_state.tema_ui:
             st.session_state.tema_ui = escolha_tema_login
             st.rerun()
+
         st.markdown(f"""
         <div style="background: {T['bg_card_grad']}; border: 1px solid {T['border']}; border-top: 4px solid {T['accent']}; border-radius: 14px; padding: 30px 32px; box-shadow: 0 12px 30px rgba(0,0,0,0.12); text-align: center; margin-bottom: 20px;">
             <div style="display: inline-block; background: rgba(29, 78, 216, 0.12); border: 1px solid rgba(29, 78, 216, 0.3); color: {T['accent']}; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; padding: 4px 12px; border-radius: 20px; margin-bottom: 12px;">
