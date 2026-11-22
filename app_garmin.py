@@ -34,7 +34,7 @@ st.set_page_config(
 )
 
 if "tema_ui" not in st.session_state:
-    st.session_state.tema_ui = "Claro (Diurno)"
+    st.session_state.tema_ui = "Escuro (Cockpit)"
 
 def obter_paleta_cores():
     modo_claro = "Claro" in st.session_state.tema_ui
@@ -486,12 +486,17 @@ if st.session_state.usuario_logado is None:
     col1, col2, col3 = st.columns([1.2, 1.8, 1.2])
 
     with col2:
-        escolha_tema_login = st.radio(
+        def _trocar_tema_login():
+            st.session_state.tema_ui = st.session_state.radio_tema_login
+
+        st.radio(
             "Tema Visual:",
             ["Claro (Diurno)", "Escuro (Cockpit)"],
             index=0 if "Claro" in st.session_state.tema_ui else 1,
             horizontal=True,
-            label_visibility="collapsed"
+            label_visibility="collapsed",
+            key="radio_tema_login",
+            on_change=_trocar_tema_login
         )
         if escolha_tema_login != st.session_state.tema_ui:
             st.session_state.tema_ui = escolha_tema_login
