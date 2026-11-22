@@ -498,9 +498,6 @@ if st.session_state.usuario_logado is None:
             key="radio_tema_login",
             on_change=_trocar_tema_login
         )
-            if escolha_tema_login != st.session_state.tema_ui:
-            st.session_state.tema_ui = escolha_tema_login
-            st.rerun()
 
         st.markdown(f"""
         <div style="background: {T['bg_card_grad']}; border: 1px solid {T['border']}; border-top: 4px solid {T['accent']}; border-radius: 14px; padding: 30px 32px; box-shadow: 0 12px 30px rgba(0,0,0,0.12); text-align: center; margin-bottom: 20px;">
