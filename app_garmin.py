@@ -285,6 +285,27 @@ hr {{
 </style>"""
     st.markdown(css, unsafe_allow_html=True)
 
+    st.markdown("""<style>
+/* Força todas as abas (Login e Painel) para BRANCO PURO (#ffffff) no Claro e no Escuro */
+button[data-baseweb="tab"],
+button[data-baseweb="tab"] [data-testid="stMarkdownContainer"],
+button[data-baseweb="tab"] [data-testid="stMarkdownContainer"] p,
+button[role="tab"],
+button[role="tab"] p,
+button[role="tab"] span {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    opacity: 1 !important;
+    font-weight: 600 !important;
+}
+button[data-baseweb="tab"][aria-selected="true"] [data-testid="stMarkdownContainer"] p,
+button[role="tab"][aria-selected="true"] p {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    font-weight: 700 !important;
+}
+</style>""", unsafe_allow_html=True)
+
     if t['modo'] == 'light':
         st.markdown("""<style>
 /* 1. Etiqueta do arquivo .CSV (todas as camadas internas em branco) */
