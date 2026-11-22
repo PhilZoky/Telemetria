@@ -360,6 +360,33 @@ textarea {
 </style>""", unsafe_allow_html=True)
 
 injetar_estilo_profissional(T)
+st.html("""<style>
+html body .stTabs [data-baseweb="tab-list"] button[role="tab"],
+html body .stTabs [data-baseweb="tab-list"] button[role="tab"] p,
+html body .stTabs [data-baseweb="tab-list"] button[role="tab"] span,
+html body .stTabs [data-baseweb="tab-list"] button[role="tab"] div,
+html body div[data-baseweb="tab-list"] button[data-baseweb="tab"],
+html body div[data-baseweb="tab-list"] button[data-baseweb="tab"] * {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    opacity: 1 !important;
+    font-weight: 600 !important;
+}
+html body .stTabs [data-baseweb="tab-list"] button[aria-selected="true"],
+html body div[data-baseweb="tab-list"] button[aria-selected="true"] {
+    background-color: rgba(255, 255, 255, 0.18) !important;
+    border-radius: 7px !important;
+}
+html body .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] *,
+html body div[data-baseweb="tab-list"] button[aria-selected="true"] * {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    font-weight: 700 !important;
+}
+html body [data-baseweb="tab-highlight"] {
+    background-color: #ffffff !important;
+}
+</style>""")
 
 
 # ==========================================
