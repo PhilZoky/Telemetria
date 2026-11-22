@@ -360,42 +360,16 @@ textarea {
 </style>""", unsafe_allow_html=True)
 
 injetar_estilo_profissional(T)
-components.html("""
-<script>
-const doc = window.parent.document;
-let style = doc.getElementById('forcar-abas-brancas');
-if (!style) {
-    style = doc.createElement('style');
-    style.id = 'forcar-abas-brancas';
-    doc.head.appendChild(style);
+st.markdown("""<style>
+[data-baseweb="tab-list"] * {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    opacity: 1 !important;
 }
-style.innerHTML = `
-    button[data-baseweb="tab"],
-    button[data-baseweb="tab"] *,
-    button[role="tab"],
-    button[role="tab"] * {
-        color: #ffffff !important;
-        -webkit-text-fill-color: #ffffff !important;
-        opacity: 1 !important;
-        font-weight: 600 !important;
-    }
-    button[data-baseweb="tab"][aria-selected="true"],
-    button[role="tab"][aria-selected="true"] {
-        background-color: rgba(255, 255, 255, 0.18) !important;
-        border-radius: 7px !important;
-    }
-    button[data-baseweb="tab"][aria-selected="true"] *,
-    button[role="tab"][aria-selected="true"] * {
-        color: #ffffff !important;
-        -webkit-text-fill-color: #ffffff !important;
-        font-weight: 700 !important;
-    }
-    div[data-baseweb="tab-highlight"] {
-        background-color: #ffffff !important;
-    }
-`;
-</script>
-""", height=0, width=0)
+[data-baseweb="tab-highlight"] {
+    background-color: #ffffff !important;
+}
+</style>""", unsafe_allow_html=True)
 
 
 # ==========================================
