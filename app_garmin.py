@@ -137,7 +137,7 @@ label, .stMarkdown p, .stRadio label, [data-testid="stWidgetLabel"] p {{
     color: {t['txt_main']} !important;
     font-weight: 600 !important;
 }}
-/* Abas: texto PRETO no Light e BRANCO no Dark */
+/* Abas */
 .stTabs [data-baseweb="tab-list"],
 div[role="tablist"] {{
     gap: 8px !important;
@@ -386,29 +386,21 @@ def obter_credencial_ia():
     return PADRAO_API_KEY.strip()
 
 def gerar_parecer_contingencia(max_g, min_g, pico_tq, pico_itt, pico_ng, pico_nh, alertas):
-    """Gera parecer técnico estruturado automaticamente caso esteja offline ou sem chave ativa."""
-    status_geral = "CONDIÇÃO VERDE (OPERAÇÃO NORMAL)" if not alertas else "EXCEDÊNCIA OPERACIONAL DETECTADA"
-    bloco_alertas = "\n".join([f"* {a}" for a in alertas]) if alertas else "* **Sem Ocorrências:** Todos os parâmetros mantiveram-se estritamente dentro do envelope operacional previsto em manual."
+    """Gera análise descritiva estruturada automaticamente caso esteja offline ou sem chave ativa."""
+    status_geral = "OPERAÇÃO INTEGRAL DENTRO DO ENVELOPE NOMINAL" if not alertas else "REGISTRO DE EXCEDÊNCIA OPERACIONAL NO PERFIL"
+    bloco_alertas = "\n".join([f"* {a}" for a in alertas]) if alertas else "* **Sem Ocorrências:** Todos os sensores de célula e motor mantiveram-se dentro dos limites previstos para o perfil configurado."
 
-    recomendacoes = (
-        "* **Inspeção Técnica Mandatória:** Executar verificação direcionada nos subsistemas listados nas excedências acima antes da liberação para o próximo voo.\n"
-        "* **Avaliação de Grupo Motopropulsor / Estrutura:** Caso se confirme ultrapassagem de **T5 (ITT)**, **Torque** ou **Força G**, cumprir itens de inspeção condicional do manual de manutenção."
-        if alertas else
-        "* **Aeronave Disponível:** Parâmetros termodinâmicos (**T5/ITT**, **Ng**) e mecânicos (**Torque**, **Nh**, **Sistema de Lubrificação**) operaram de forma nominal dentro do Arco Verde.\n"
-        "* **Rotina de Pista:** Cumprir apenas inspeção pós-voo regulamentar."
-    )
+    return f"""# ANÁLISE TÉCNICA DETALHADA DE VOO E PERFORMANCE (SOLO)
+## 1. PERFIL OPERACIONAL E SÍNTESE DO VOO
+* **Enquadramento Global:** **{status_geral}**
+* **Envelope Estrutural (Força G):** A aeronave operou entre fator de carga mínimo de **{min_g:.2f}G** e máximo de **+{max_g:.2f}G** durante a missão.
 
-    return f"""# RELATÓRIO DE INSPETORIA TÉCNICA E TELEMETRIA
-## 1. VISÃO GERAL E DINÂMICA DE VOO
-* **Status Global da Missão:** **{status_geral}**
-* **Análise dos Gráficos 1 e 2 (Dinâmica e Fator de Carga):** Como evidenciado pelas curvas de voo, a aeronave operou entre o fator de carga máximo de **{max_g:.2f}G** e mínimo de **{min_g:.2f}G** (Limites estruturais T-27M com flapes recolhidos: **-3.0G a +6.0G**).
-* **Análise dos Gráficos 3 a 6 (Grupo Motopropulsor):** O motor Pratt & Whitney PT6A-25C registrou pico de Torque de **{pico_tq:.0f} lb.ft** (Limite máx: **1795 lb.ft**), temperatura inter-turbinas (**T5/ITT**) máxima de **{pico_itt:.0f} ºC** (Limite decolagem: **790 ºC**), rotação do gerador de gás (**Ng**) de **{pico_ng:.1f}%** (Limite: **101.5%**) e rotação da hélice (**Nh**) de **{pico_nh:.1f}%** (Limite: **100.0%**).
+## 2. PERFORMANCE DO GRUPO MOTOPROPULSOR
+* **Torque e Propulsão:** Pico registrado de **{pico_tq:.0f} lb.ft** de Torque e rotação máxima de hélice (**Nh**) de **{pico_nh:.1f}%**.
+* **Regime Termodinâmico:** Temperatura inter-turbinas (**T5/ITT**) atingiu pico de **{pico_itt:.0f} ºC**, acompanhada por rotação máxima do gerador de gás (**Ng**) de **{pico_ng:.1f}%**.
 
-## 2. ESTUDO DE CASO: OCORRÊNCIAS E PICOS DE ESFORÇO
-{bloco_alertas}
-
-## 3. DIAGNÓSTICO E RECOMENDAÇÕES DE MANUTENÇÃO
-{recomendacoes}"""
+## 3. EVENTOS E EXCEDÊNCIAS REGISTRADAS
+{bloco_alertas}"""
 
 def gerar_texto_ia(prompt_texto):
     credencial = obter_credencial_ia()
@@ -448,9 +440,9 @@ def gerar_texto_ia(prompt_texto):
             payload = {
                 "model": mod,
                 "messages": [{"role": "user", "content": prompt_texto}],
-                "temperature": 0.3
+                "temperature": 0.25
             }
-            resp = requests.post(url, headers=headers, json=payload, timeout=45)
+            resp = requests.post(url, headers=headers, json=payload, timeout=60)
             if resp.status_code == 200:
                 return resp.json()["choices"][0]["message"]["content"]
             ultimo_erro_groq = f"Erro na Groq ({resp.status_code}) [{mod}]: {resp.text}"
@@ -463,13 +455,13 @@ def gerar_texto_ia(prompt_texto):
 
     for mod in modelos_tentativa:
         url_key = f"https://generativelanguage.googleapis.com/v1beta/models/{mod}:generateContent?key={credencial}"
-        resp = requests.post(url_key, headers={"Content-Type": "application/json"}, json=payload, timeout=45)
+        resp = requests.post(url_key, headers={"Content-Type": "application/json"}, json=payload, timeout=60)
         if resp.status_code == 200:
             return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
         if credencial.startswith("AQ."):
             url_bearer = f"https://generativelanguage.googleapis.com/v1beta/models/{mod}:generateContent"
             headers_b = {"Content-Type": "application/json", "Authorization": f"Bearer {credencial}"}
-            resp_b = requests.post(url_bearer, headers=headers_b, json=payload, timeout=45)
+            resp_b = requests.post(url_bearer, headers=headers_b, json=payload, timeout=60)
             if resp_b.status_code == 200:
                 return resp_b.json()["candidates"][0]["content"]["parts"][0]["text"]
         ultimo_erro = f"Status {resp.status_code}: {resp.text}"
@@ -1074,6 +1066,59 @@ def adicionar_paragrafo_com_markdown(doc_or_cell, texto, estilo=None, bullet=Fal
             p.add_run(parte)
     return p
 
+def renderizar_markdown_no_word(doc, texto, cor_titulo=RGBColor(27, 54, 93)):
+    """Converte títulos (#, ##, ###), bullets (*, -) e negrito (**) para formatação nativa do Word."""
+    if not str(texto).strip():
+        return
+    for linha in str(texto).split('\n'):
+        l_limpa = linha.strip()
+        if not l_limpa:
+            continue
+
+        if l_limpa.startswith("# "):
+            tit = l_limpa[2:].strip()
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(10)
+            p.paragraph_format.space_after = Pt(4)
+            r = p.add_run(tit)
+            r.bold = True
+            r.font.size = Pt(12)
+            r.font.color.rgb = cor_titulo
+
+        elif l_limpa.startswith("## "):
+            subtit = l_limpa[3:].strip()
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(8)
+            p.paragraph_format.space_after = Pt(4)
+            r = p.add_run(subtit)
+            r.bold = True
+            r.font.size = Pt(10.5)
+            r.font.color.rgb = cor_titulo
+
+        elif l_limpa.startswith("### "):
+            subtit3 = l_limpa[4:].strip()
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(6)
+            p.paragraph_format.space_after = Pt(3)
+            r = p.add_run(subtit3)
+            r.bold = True
+            r.font.size = Pt(10)
+            r.font.color.rgb = cor_titulo
+
+        elif l_limpa.startswith("---"):
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(4)
+            p.paragraph_format.space_after = Pt(4)
+            r = p.add_run("_________________________________________________________________________________")
+            r.font.color.rgb = RGBColor(200, 200, 200)
+
+        elif l_limpa.startswith("* ") or l_limpa.startswith("- "):
+            conteudo_item = l_limpa[2:].strip()
+            adicionar_paragrafo_com_markdown(doc, conteudo_item, bullet=True)
+
+        else:
+            adicionar_paragrafo_com_markdown(doc, l_limpa)
+
 def gerar_docx_solo_editado(tempos_dict, alertas_texto, obs_dict, graficos_dict):
     doc = Document()
 
@@ -1168,52 +1213,25 @@ def gerar_docx_solo_editado(tempos_dict, alertas_texto, obs_dict, graficos_dict)
     p_s2 = doc.add_paragraph()
     p_s2.paragraph_format.space_before = Pt(14)
     p_s2.paragraph_format.space_after = Pt(6)
-    r_s2 = p_s2.add_run("2. ANÁLISE DE TELEMETRIA E PARECER TÉCNICO DE INSPETORIA")
+    r_s2 = p_s2.add_run("2. ANÁLISE DE TELEMETRIA E PERFORMANCE DO VOO")
     r_s2.bold = True
     r_s2.font.size = Pt(11)
     r_s2.font.color.rgb = COR_AZUL_FAB
 
     texto_ia = obs_dict.get("Inspetoria e Graficos", "")
-    if str(texto_ia).strip():
-        linhas = str(texto_ia).split('\n')
-        for linha in linhas:
-            l_limpa = linha.strip()
-            if not l_limpa:
-                continue
+    renderizar_markdown_no_word(doc, texto_ia, COR_AZUL_FAB)
 
-            if l_limpa.startswith("# "):
-                tit = l_limpa.replace("# ", "").strip()
-                p = doc.add_paragraph()
-                p.paragraph_format.space_before = Pt(10)
-                p.paragraph_format.space_after = Pt(4)
-                r = p.add_run(tit)
-                r.bold = True
-                r.font.size = Pt(12)
-                r.font.color.rgb = COR_AZUL_FAB
-
-            elif l_limpa.startswith("## "):
-                subtit = l_limpa.replace("## ", "").strip()
-                p = doc.add_paragraph()
-                p.paragraph_format.space_before = Pt(8)
-                p.paragraph_format.space_after = Pt(4)
-                r = p.add_run(subtit)
-                r.bold = True
-                r.font.size = Pt(10.5)
-                r.font.color.rgb = COR_AZUL_FAB
-
-            elif l_limpa.startswith("---"):
-                p = doc.add_paragraph()
-                p.paragraph_format.space_before = Pt(4)
-                p.paragraph_format.space_after = Pt(4)
-                r = p.add_run("_________________________________________________________________________________")
-                r.font.color.rgb = RGBColor(200, 200, 200)
-
-            elif l_limpa.startswith("* ") or l_limpa.startswith("- "):
-                conteudo_item = l_limpa[2:].strip()
-                adicionar_paragrafo_com_markdown(doc, conteudo_item, bullet=True)
-
-            else:
-                adicionar_paragrafo_com_markdown(doc, l_limpa)
+    for chave_extra in ["Resumo de Painel e Rota", "Avaliador de Manobras e Pouso"]:
+        val_extra = str(obs_dict.get(chave_extra, "")).strip()
+        if val_extra:
+            p_ex = doc.add_paragraph()
+            p_ex.paragraph_format.space_before = Pt(8)
+            p_ex.paragraph_format.space_after = Pt(4)
+            r_ex = p_ex.add_run(f"Apontamentos Complementares — {chave_extra}")
+            r_ex.bold = True
+            r_ex.font.size = Pt(10.5)
+            r_ex.font.color.rgb = COR_AZUL_FAB
+            renderizar_markdown_no_word(doc, val_extra, COR_AZUL_FAB)
 
     for titulo_grafico, fig in graficos_dict.items():
         if fig is not None:
@@ -1259,22 +1277,24 @@ def gerar_docx_solo_editado(tempos_dict, alertas_texto, obs_dict, graficos_dict)
 
 def gerar_docx_formatura_editado(arq_lider, arq_ala, obs_dict, graficos_dict):
     doc = Document()
+    COR_AZUL_FAB = RGBColor(27, 54, 93)
+
     titulo = doc.add_heading("RELATÓRIO TÁTICO DE FORMATURA", 0)
     titulo.alignment = 1
     data_hoje = datetime.now().strftime('%d/%m/%Y')
-    doc.add_paragraph(f"Analista: {st.session_state.nome_logado} | Data: {data_hoje}").alignment = 1
+    doc.add_paragraph(f"Perfil: {projeto_atual} | Analista: {st.session_state.nome_logado} | Data: {data_hoje}").alignment = 1
 
     doc.add_heading("1. AERONAVES ENVOLVIDAS", level=1)
-    doc.add_paragraph(f"Ficheiro Líder: {arq_lider}")
-    doc.add_paragraph(f"Ficheiro Ala: {arq_ala}")
+    adicionar_paragrafo_com_markdown(doc, f"**Aeronave Líder (Nº 1):** {arq_lider}")
+    adicionar_paragrafo_com_markdown(doc, f"**Aeronave Ala (Nº 2):** {arq_ala}")
 
-    doc.add_heading("2. DEBRIEFING E AVALIAÇÃO TÁTICA", level=1)
+    doc.add_heading("2. ANÁLISE TÉCNICA E PERFORMANCE DA FORMATURA", level=1)
     tem_obs = False
     for titulo_obs, texto in obs_dict.items():
         if str(texto).strip() != "":
             tem_obs = True
-            doc.add_heading(f"[{titulo_obs}]", level=2)
-            doc.add_paragraph(str(texto))
+            doc.add_heading(f"{titulo_obs}", level=2)
+            renderizar_markdown_no_word(doc, texto, COR_AZUL_FAB)
     if not tem_obs:
         doc.add_paragraph("Nenhuma observação inserida no dossiê.")
 
@@ -1289,17 +1309,19 @@ def gerar_docx_formatura_editado(arq_lider, arq_ala, obs_dict, graficos_dict):
 
 def gerar_docx_comparativo_editado(arq_a, arq_b, df_metricas, obs_dict, graficos_dict):
     doc = Document()
-    titulo = doc.add_heading("RELATÓRIO DE TREND MONITORING (COMPARATIVO)", 0)
+    COR_AZUL_FAB = RGBColor(27, 54, 93)
+
+    titulo = doc.add_heading("RELATÓRIO DE TREND MONITORING (PERFORMANCE E DEGRADAÇÃO)", 0)
     titulo.alignment = 1
 
     data_hoje = datetime.now().strftime('%d/%m/%Y')
     doc.add_paragraph(f"Perfil: {projeto_atual} | Analista: {st.session_state.nome_logado} | Data: {data_hoje}").alignment = 1
 
     doc.add_heading("1. VOOS AVALIADOS", level=1)
-    doc.add_paragraph(f"Voo A (Referência / Antigo): {arq_a}")
-    doc.add_paragraph(f"Voo B (Avaliado / Recente): {arq_b}")
+    adicionar_paragrafo_com_markdown(doc, f"**Voo A (Referência / Baseline):** {arq_a}")
+    adicionar_paragrafo_com_markdown(doc, f"**Voo B (Recente / Avaliado):** {arq_b}")
 
-    doc.add_heading("2. ANÁLISE DE DESEMPENHO E DEGRADAÇÃO", level=1)
+    doc.add_heading("2. MATRIZ COMPARATIVA DE PICOS (DELTAS)", level=1)
     table = doc.add_table(rows=1, cols=4)
     table.style = 'Table Grid'
     hdr_cells = table.rows[0].cells
@@ -1321,13 +1343,13 @@ def gerar_docx_comparativo_editado(arq_a, arq_b, df_metricas, obs_dict, graficos
         elif "-" in texto_delta and ("Temp" in str(row['Parâmetro']) or "Torque" in str(row['Parâmetro'])):
             row_cells[3].paragraphs[0].runs[0].font.color.rgb = RGBColor(0, 150, 0)
 
-    doc.add_heading("3. PARECER TÉCNICO DA INSPETORIA", level=1)
+    doc.add_heading("3. ESTUDO DETALHADO DE PERFORMANCE E DEGRADAÇÃO", level=1)
     tem_obs = False
     for titulo_obs, texto in obs_dict.items():
         if str(texto).strip() != "":
             tem_obs = True
-            doc.add_heading(f"[{titulo_obs}]", level=2)
-            doc.add_paragraph(str(texto))
+            doc.add_heading(f"{titulo_obs}", level=2)
+            renderizar_markdown_no_word(doc, texto, COR_AZUL_FAB)
 
     if not tem_obs:
         doc.add_paragraph("Nenhuma observação inserida.")
@@ -1404,6 +1426,11 @@ if arquivos_up:
                 if df_merge.empty:
                     st.error("Os relógios não coincidem. Ajuste o 'Offset Fuso Horário Ala' acima para -3 ou +3.")
                 else:
+                    df_merge['Distancia_m'] = formula_haversine(
+                        df_merge['Latitude_lider'], df_merge['Longitude_lider'],
+                        df_merge['Latitude_ala'], df_merge['Longitude_ala']
+                    )
+
                     aba_dist, aba_comp, aba_3d, aba_rel_form = st.tabs([
                         "1. SEPARAÇÃO TÁTICA",
                         "2. COMPARATIVO DINÂMICO",
@@ -1416,11 +1443,6 @@ if arquivos_up:
                     fig_3d = None
 
                     with aba_dist:
-                        df_merge['Distancia_m'] = formula_haversine(
-                            df_merge['Latitude_lider'], df_merge['Longitude_lider'],
-                            df_merge['Latitude_ala'], df_merge['Longitude_ala']
-                        )
-
                         fig_dist = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.07, subplot_titles=("1. Separação Horizontal Líder-Ala (Metros)", "2. Perfil Vertical de Altitude MSL (ft)", "3. Atitude Longitudinal / Pitch (º)"))
                         fig_dist.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['Distancia_m'], name="Separação (m)", fill='tozeroy', fillcolor='rgba(56, 189, 248, 0.12)', line=dict(color='#0284c7', width=2)), row=1, col=1)
                         if 'AltMSL_lider' in df_merge.columns: fig_dist.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['AltMSL_lider'], name="Alt Líder", line=dict(color='#ea580c', width=2)), row=2, col=1)
@@ -1451,15 +1473,15 @@ if arquivos_up:
                         if 'AltMSL_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['AltMSL_lider'], name="Alt Líder", line=dict(color='#ea580c', width=2)), row=1, col=1)
                         if 'AltMSL_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['AltMSL_ala'], name="Alt Ala", line=dict(color='#2563eb', width=2, dash='dot')), row=1, col=1)
                         if 'NormAc_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['NormAc_lider'], name="G Líder", line=dict(color='#ea580c', width=2)), row=2, col=1)
-                        if 'NormAc_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['NormAc_ala'], name="G Ala", line=dict(color='#2563eb', width=2)), row=2, col=1)
+                        if 'NormAc_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['NormAc_ala'], name="G Ala", line=dict(color='#2563eb', width=2, dash='dot')), row=2, col=1)
                         if 'E1 Torq ft lbs_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 Torq ft lbs_lider'], name="Tq Líder", line=dict(color='#ea580c', width=2)), row=3, col=1)
-                        if 'E1 Torq ft lbs_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 Torq ft lbs_ala'], name="Tq Ala", line=dict(color='#2563eb', width=2)), row=3, col=1)
+                        if 'E1 Torq ft lbs_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 Torq ft lbs_ala'], name="Tq Ala", line=dict(color='#2563eb', width=2, dash='dot')), row=3, col=1)
                         if 'E1 ITT_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 ITT_lider'], name="T5 Líder", line=dict(color='#ea580c', width=2)), row=4, col=1)
-                        if 'E1 ITT_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 ITT_ala'], name="T5 Ala", line=dict(color='#2563eb', width=2)), row=4, col=1)
+                        if 'E1 ITT_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 ITT_ala'], name="T5 Ala", line=dict(color='#2563eb', width=2, dash='dot')), row=4, col=1)
                         if 'E1 NG_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 NG_lider'], name="Ng Líder", line=dict(color='#ea580c', width=2)), row=5, col=1)
-                        if 'E1 NG_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 NG_ala'], name="Ng Ala", line=dict(color='#2563eb', width=2)), row=5, col=1)
+                        if 'E1 NG_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 NG_ala'], name="Ng Ala", line=dict(color='#2563eb', width=2, dash='dot')), row=5, col=1)
                         if 'E1 NP %_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 NP %_lider'], name="Nh Líder", line=dict(color='#ea580c', width=2)), row=6, col=1)
-                        if 'E1 NP %_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 NP %_ala'], name="Nh Ala", line=dict(color='#2563eb', width=2)), row=6, col=1)
+                        if 'E1 NP %_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['E1 NP %_ala'], name="Nh Ala", line=dict(color='#2563eb', width=2, dash='dot')), row=6, col=1)
                         fig_comp.update_layout(template=T['plotly_template'], paper_bgcolor=T['plotly_bg'], plot_bgcolor=T['plotly_bg'], height=1150, hovermode="x unified", margin=dict(l=15, r=15, t=35, b=15))
                         st.plotly_chart(fig_comp, use_container_width=True)
 
@@ -1490,17 +1512,91 @@ if arquivos_up:
                         with c2: ala_editado = st.text_input("Designação Ala:", arq_ala)
 
                         st.divider()
-                        st.markdown("**Síntese Tática Automatizada por IA**")
-                        if st.button("GERAR DEBRIEFING DE FORMATURA COM IA", key="btn_ia_form"):
-                            with st.spinner("Processando a telemetria da esquadrilha..."):
+                        st.markdown("**Análise Técnica Detalhada de Formatura por IA**")
+                        if st.button("GERAR ANÁLISE COMPLETA DE FORMATURA COM IA", key="btn_ia_form", use_container_width=True):
+                            def _sf(col, fn="mean", fmt="{:.1f}"):
+                                if col not in df_merge.columns:
+                                    return "N/D"
+                                s = df_merge[col].dropna()
+                                if s.empty:
+                                    return "N/D"
+                                if fn == "max": val = s.max()
+                                elif fn == "min": val = s.min()
+                                elif fn == "mean": val = s.mean()
+                                elif fn == "median": val = s.median()
+                                elif fn == "p90": val = s.quantile(0.90)
+                                elif fn == "p95": val = s.quantile(0.95)
+                                elif fn == "std": val = s.std()
+                                else: val = s.mean()
+                                return fmt.format(val)
+
+                            dur_sync = formatar_duracao(df_merge['Datetime'].iloc[-1] - df_merge['Datetime'].iloc[0]) if len(df_merge) > 1 else "N/D"
+
+                            if 'Distancia_m' in df_merge.columns and not df_merge['Distancia_m'].dropna().empty:
+                                d_s = df_merge['Distancia_m'].dropna()
+                                pct_cerrada = (d_s <= 50).mean() * 100
+                                pct_media = ((d_s > 50) & (d_s <= 150)).mean() * 100
+                                pct_afastada = (d_s > 150).mean() * 100
+                            else:
+                                pct_cerrada = pct_media = pct_afastada = 0.0
+
+                            diff_alt_med, diff_alt_max = "N/D", "N/D"
+                            if 'AltMSL_lider' in df_merge.columns and 'AltMSL_ala' in df_merge.columns:
+                                diff_alt = (df_merge['AltMSL_ala'] - df_merge['AltMSL_lider']).abs().dropna()
+                                if not diff_alt.empty:
+                                    diff_alt_med = f"{diff_alt.mean():.0f} ft"
+                                    diff_alt_max = f"{diff_alt.max():.0f} ft"
+
+                            with st.spinner("Processando geometria tática, dinâmica comparada e carga de motores..."):
                                 try:
                                     prompt_form = f"""
-                                    Atue como um Piloto Inspetor da Força Aérea Brasileira.
-                                    Faça um breve debriefing técnico (máximo 2 parágrafos) de um voo em formatura.
-                                    Aeronave Líder: {arq_lider}
-                                    Aeronave Ala: {arq_ala}
-                                    Escreva com jargão militar de aviação que a missão foi avaliada quanto à dispersão geométrica e aos parâmetros dinâmicos de motor (Ng, T5/ITT, Torque). Seja profissional e direto.
-                                    """
+Atue como um Engenheiro de Ensaios em Voo e Instrutor Avaliador de Voo em Formatura (FDM), especialista em {projeto_atual}.
+Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura, comparando minuciosamente o posicionamento geométrico, o comportamento aerodinâmico das células e a carga de trabalho/performance dos motores do LÍDER e do ALA.
+
+=== RESTRIÇÃO ABSOLUTA DE ESCOPO ===
+- NÃO faça diagnóstico ou resolução de panes, NÃO sugira ações de manutenção corretiva, inspeções ou troca de peças.
+- Foque 100% na caracterização técnica do voo em formatura, estabilidade de posição, sincronismo aerodinâmico e demanda comparativa sobre os motores (especialmente modulação de potência/manete do Ala em relação ao Líder).
+- Utilize EXCLUSIVAMENTE os dados abaixo. Nunca invente valores, horários ou eventos.
+
+=== 1. IDENTIFICAÇÃO E GEOMETRIA TÁTICA ===
+- Aeronave Líder (Nº 1): {arq_lider}
+- Aeronave Ala (Nº 2): {arq_ala}
+- Tempo Total Sincronizado: {dur_sync}
+- Separação Horizontal (Haversine): Mínima {_sf('Distancia_m', 'min', '{:.1f}')} m | Média {_sf('Distancia_m', 'mean', '{:.1f}')} m | Mediana (P50) {_sf('Distancia_m', 'median', '{:.1f}')} m | P90 {_sf('Distancia_m', 'p90', '{:.1f}')} m | Máxima {_sf('Distancia_m', 'max', '{:.1f}')} m
+- Distribuição de Proximidade: {pct_cerrada:.1f}% do tempo <= 50 m | {pct_media:.1f}% entre 50 m e 150 m | {pct_afastada:.1f}% > 150 m
+- Diferencial Vertical Absoluto (|Alt Ala - Alt Líder|): Médio {diff_alt_med} | Máximo {diff_alt_max}
+
+=== 2. DINÂMICA DE VOO E MANOBRAS (LÍDER VS ALA) ===
+- Altitude MSL: Líder Média {_sf('AltMSL_lider', 'mean', '{:.0f}')} ft / Máx {_sf('AltMSL_lider', 'max', '{:.0f}')} ft | Ala Média {_sf('AltMSL_ala', 'mean', '{:.0f}')} ft / Máx {_sf('AltMSL_ala', 'max', '{:.0f}')} ft
+- Velocidade (IAS): Líder Média {_sf('IAS_lider', 'mean', '{:.1f}')} kt / Máx {_sf('IAS_lider', 'max', '{:.1f}')} kt | Ala Média {_sf('IAS_ala', 'mean', '{:.1f}')} kt / Máx {_sf('IAS_ala', 'max', '{:.1f}')} kt
+- Força G (NormAc): Líder [{_sf('NormAc_lider', 'min', '{:.2f}')}G a +{_sf('NormAc_lider', 'max', '{:.2f}')}G] | Ala [{_sf('NormAc_ala', 'min', '{:.2f}')}G a +{_sf('NormAc_ala', 'max', '{:.2f}')}G]
+- Pitch: Líder [{_sf('Pitch_lider', 'min', '{:.1f}')}º a {_sf('Pitch_lider', 'max', '{:.1f}')}º] | Ala [{_sf('Pitch_ala', 'min', '{:.1f}')}º a {_sf('Pitch_ala', 'max', '{:.1f}')}º]
+- Roll: Líder [{_sf('Roll_lider', 'min', '{:.1f}')}º a {_sf('Roll_lider', 'max', '{:.1f}')}º] | Ala [{_sf('Roll_ala', 'min', '{:.1f}')}º a {_sf('Roll_ala', 'max', '{:.1f}')}º]
+
+=== 3. PERFORMANCE E CARGA DE TRABALHO DOS MOTORES (LÍDER VS ALA) ===
+- Torque (lb.ft):
+  * Líder: Média {_sf('E1 Torq ft lbs_lider', 'mean', '{:.0f}')} | P95 {_sf('E1 Torq ft lbs_lider', 'p95', '{:.0f}')} | Máx {_sf('E1 Torq ft lbs_lider', 'max', '{:.0f}')} | Oscilação (Desvio-Padrão): {_sf('E1 Torq ft lbs_lider', 'std', '{:.0f}')}
+  * Ala:   Média {_sf('E1 Torq ft lbs_ala', 'mean', '{:.0f}')} | P95 {_sf('E1 Torq ft lbs_ala', 'p95', '{:.0f}')} | Máx {_sf('E1 Torq ft lbs_ala', 'max', '{:.0f}')} | Oscilação (Desvio-Padrão): {_sf('E1 Torq ft lbs_ala', 'std', '{:.0f}')}
+- Temperatura T5 / ITT (ºC):
+  * Líder: Média {_sf('E1 ITT_lider', 'mean', '{:.0f}')} | P95 {_sf('E1 ITT_lider', 'p95', '{:.0f}')} | Máx {_sf('E1 ITT_lider', 'max', '{:.0f}')} | Oscilação (Std): {_sf('E1 ITT_lider', 'std', '{:.1f}')}
+  * Ala:   Média {_sf('E1 ITT_ala', 'mean', '{:.0f}')} | P95 {_sf('E1 ITT_ala', 'p95', '{:.0f}')} | Máx {_sf('E1 ITT_ala', 'max', '{:.0f}')} | Oscilação (Std): {_sf('E1 ITT_ala', 'std', '{:.1f}')}
+- Gerador de Gás Ng (%):
+  * Líder: Média {_sf('E1 NG_lider', 'mean', '{:.1f}')}% | P95 {_sf('E1 NG_lider', 'p95', '{:.1f}')}% | Máx {_sf('E1 NG_lider', 'max', '{:.1f}')}% | Oscilação (Std): {_sf('E1 NG_lider', 'std', '{:.2f}')}%
+  * Ala:   Média {_sf('E1 NG_ala', 'mean', '{:.1f}')}% | P95 {_sf('E1 NG_ala', 'p95', '{:.1f}')}% | Máx {_sf('E1 NG_ala', 'max', '{:.1f}')}% | Oscilação (Std): {_sf('E1 NG_ala', 'std', '{:.2f}')}%
+- Rotação Hélice Nh (%):
+  * Líder: Média {_sf('E1 NP %_lider', 'mean', '{:.1f}')}% | Máx {_sf('E1 NP %_lider', 'max', '{:.1f}')}%
+  * Ala:   Média {_sf('E1 NP %_ala', 'mean', '{:.1f}')}% | Máx {_sf('E1 NP %_ala', 'max', '{:.1f}')}%
+
+=== FORMATO OBRIGATÓRIO ===
+- Tom estritamente técnico, profundo e objetivo, sem emojis.
+- Use `#`, `##`, `*` e **negrito** para destacar sensores, deltas e valores numéricos.
+
+# ANÁLISE TÉCNICA DETALHADA DE VOO EM FORMATURA
+## 1. GEOMETRIA TÁTICA, SEPARAÇÃO E ESTABILIDADE DE POSIÇÃO
+## 2. DINÂMICA DE VOO E SINCRONISMO DE MANOBRAS (LÍDER VS ALA)
+## 3. PERFORMANCE DOS MOTORES E CARGA DE TRABALHO DE POTÊNCIA (MODULAÇÃO DE MANETE)
+## 4. SÍNTESE COMPARATIVA DE DESEMPENHO DA ESQUADRILHA
+"""
                                     texto_ia_form = gerar_texto_ia(prompt_form)
                                     st.session_state.obs_comparativo = texto_ia_form
                                     st.rerun()
@@ -1508,18 +1604,31 @@ if arquivos_up:
                                     dist_med = df_merge['Distancia_m'].mean() if 'Distancia_m' in df_merge.columns else 0
                                     dist_max = df_merge['Distancia_m'].max() if 'Distancia_m' in df_merge.columns else 0
                                     st.session_state.obs_comparativo = (
-                                        f"Missão de formatura avaliada entre a aeronave Líder ({arq_lider}) e a aeronave Ala ({arq_ala}). "
-                                        f"Durante o perfil sincronizado, observou-se separação horizontal média de {dist_med:.1f} metros, "
-                                        f"com afastamento máximo pontual de {dist_max:.1f} metros durante as recomposições.\n\n"
-                                        f"Quanto ao acompanhamento dinâmico do grupo motopropulsor (Torque, T5/ITT, Ng e Nh), "
-                                        f"as variações de regime do Ala mantiveram-se compatíveis com as correções de posição na ala."
+                                        f"# ANÁLISE TÉCNICA DETALHADA DE VOO EM FORMATURA\n"
+                                        f"## 1. GEOMETRIA TÁTICA E SEPARAÇÃO\n"
+                                        f"* **Esquadrilha:** Líder **{arq_lider}** e Ala **{arq_ala}** (tempo sincronizado: **{dur_sync}**).\n"
+                                        f"* **Separação Horizontal:** Média de **{dist_med:.1f} m** e afastamento máximo de **{dist_max:.1f} m**.\n"
+                                        f"* **Diferencial Vertical:** Médio de **{diff_alt_med}** e máximo de **{diff_alt_max}**.\n"
+                                        f"## 2. DESEMPENHO DOS MOTORES\n"
+                                        f"* **Torque Médio (Líder vs Ala):** **{_sf('E1 Torq ft lbs_lider', 'mean', '{:.0f}')} lb.ft** vs **{_sf('E1 Torq ft lbs_ala', 'mean', '{:.0f}')} lb.ft**.\n"
+                                        f"* **T5/ITT Média (Líder vs Ala):** **{_sf('E1 ITT_lider', 'mean', '{:.0f}')} ºC** vs **{_sf('E1 ITT_ala', 'mean', '{:.0f}')} ºC**."
                                     )
                                     st.rerun()
 
+                        obs_form_edit = st.text_area(
+                            "Análise de Formatura (Editável para o Dossiê):",
+                            value=st.session_state.obs_comparativo,
+                            key="k_form_rel_ia",
+                            height=280
+                        )
+                        if st.button("CONFIRMAR TEXTO DO DOSSIÊ", key="b_form_rel_conf"):
+                            st.session_state.obs_comparativo = obs_form_edit
+                            st.success("Texto salvo para exportação.")
+
                         obs_formatura_atual = {
-                            "Posicionamento e Distancia": st.session_state.obs_distancia,
-                            "Comparativo Dinamico (Motores)": st.session_state.obs_comparativo,
-                            "Trajetoria Espacial 3D": st.session_state.obs_3d
+                            "Posicionamento e Distância": st.session_state.obs_distancia,
+                            "Análise Técnica Comparativa (Voo e Motores)": st.session_state.obs_comparativo,
+                            "Trajetória Espacial 3D": st.session_state.obs_3d
                         }
 
                         graficos_form = {
@@ -1628,15 +1737,188 @@ if arquivos_up:
                         st.success("Salvo.")
 
                 with aba_rel_comp:
+                    st.markdown("#### Estudo Detalhado de Performance e Degradação de Motor (Trend Monitoring)")
+
+                    if st.button("GERAR ANÁLISE PROFUNDA DE PERFORMANCE E DEGRADAÇÃO COM IA", key="btn_ia_trend", use_container_width=True):
+                        dfA_v = dfA[dfA['IAS'] > 50] if 'IAS' in dfA.columns and not dfA[dfA['IAS'] > 50].empty else dfA
+                        dfB_v = dfB[dfB['IAS'] > 50] if 'IAS' in dfB.columns and not dfB[dfB['IAS'] > 50].empty else dfB
+                        dfA_m = dfA[dfA['E1 NG'] > 50] if 'E1 NG' in dfA.columns and not dfA[dfA['E1 NG'] > 50].empty else dfA_v
+                        dfB_m = dfB[dfB['E1 NG'] > 50] if 'E1 NG' in dfB.columns and not dfB[dfB['E1 NG'] > 50].empty else dfB_v
+
+                        def _m(df_x, col, fn="mean"):
+                            if col not in df_x.columns:
+                                return np.nan
+                            s = df_x[col].dropna()
+                            if s.empty:
+                                return np.nan
+                            if fn == "mean": return float(s.mean())
+                            if fn == "max": return float(s.max())
+                            if fn == "min": return float(s.min())
+                            if fn == "p95": return float(s.quantile(0.95))
+                            if fn == "std": return float(s.std())
+                            return float(s.mean())
+
+                        def _cmp(label, col, fn="mean", fmt="{:.1f}", unit="", df1_ref=dfA_v, df2_ref=dfB_v):
+                            vA = _m(df1_ref, col, fn)
+                            vB = _m(df2_ref, col, fn)
+                            if np.isnan(vA) or np.isnan(vB):
+                                return f"- {label}: N/D"
+                            d = vB - vA
+                            sinal = "+" if d > 0 else ""
+                            pct = f" ({sinal}{(d / vA) * 100:.2f}%)" if vA != 0 else ""
+                            return f"- {label}: Voo A = {fmt.format(vA)}{unit} | Voo B = {fmt.format(vB)}{unit} | Delta (B-A) = {sinal}{fmt.format(d)}{unit}{pct}"
+
+                        # Análise em Banda de Iso-Torque (mesma carga mecânica nos dois voos)
+                        bloco_isotorque = "- Dados de Torque insuficientes para comparação em banda de Iso-Torque."
+                        if 'E1 Torq ft lbs' in dfA_v.columns and 'E1 Torq ft lbs' in dfB_v.columns:
+                            tq_a_s = dfA_v['E1 Torq ft lbs'].dropna()
+                            tq_b_s = dfB_v['E1 Torq ft lbs'].dropna()
+                            if not tq_a_s.empty and not tq_b_s.empty:
+                                low_tq = float(tq_a_s.quantile(0.60))
+                                high_tq = float(tq_a_s.quantile(0.92))
+                                isoA = dfA_v[(dfA_v['E1 Torq ft lbs'] >= low_tq) & (dfA_v['E1 Torq ft lbs'] <= high_tq)]
+                                isoB = dfB_v[(dfB_v['E1 Torq ft lbs'] >= low_tq) & (dfB_v['E1 Torq ft lbs'] <= high_tq)]
+
+                                if len(isoA) >= 10 and len(isoB) >= 10:
+                                    tqA_iso, tqB_iso = _m(isoA, 'E1 Torq ft lbs', 'mean'), _m(isoB, 'E1 Torq ft lbs', 'mean')
+                                    ittA_iso, ittB_iso = _m(isoA, 'E1 ITT', 'mean'), _m(isoB, 'E1 ITT', 'mean')
+                                    ngA_iso, ngB_iso = _m(isoA, 'E1 NG', 'mean'), _m(isoB, 'E1 NG', 'mean')
+
+                                    raz_itt_A = (ittA_iso / tqA_iso) * 1000 if (not np.isnan(ittA_iso) and not np.isnan(tqA_iso) and tqA_iso > 0) else np.nan
+                                    raz_itt_B = (ittB_iso / tqB_iso) * 1000 if (not np.isnan(ittB_iso) and not np.isnan(tqB_iso) and tqB_iso > 0) else np.nan
+                                    raz_ng_A = (ngA_iso / tqA_iso) * 1000 if (not np.isnan(ngA_iso) and not np.isnan(tqA_iso) and tqA_iso > 0) else np.nan
+                                    raz_ng_B = (ngB_iso / tqB_iso) * 1000 if (not np.isnan(ngB_iso) and not np.isnan(tqB_iso) and tqB_iso > 0) else np.nan
+
+                                    linha_raz_itt = (
+                                        f"- Índice Térmico Específico (ºC de ITT por 1000 lb.ft): Voo A = {raz_itt_A:.1f} | Voo B = {raz_itt_B:.1f} | Delta = {(raz_itt_B - raz_itt_A):+.1f}"
+                                        if not (np.isnan(raz_itt_A) or np.isnan(raz_itt_B)) else "- Índice Térmico Específico: N/D"
+                                    )
+                                    linha_raz_ng = (
+                                        f"- Índice de Demanda do Compressor (% de Ng por 1000 lb.ft): Voo A = {raz_ng_A:.2f} | Voo B = {raz_ng_B:.2f} | Delta = {(raz_ng_B - raz_ng_A):+.2f}"
+                                        if not (np.isnan(raz_ng_A) or np.isnan(raz_ng_B)) else "- Índice de Demanda do Compressor: N/D"
+                                    )
+
+                                    bloco_isotorque = f"""- Banda de Referência de Iso-Torque (Regime de Alta Potência): {low_tq:.0f} a {high_tq:.0f} lb.ft (Amostras: Voo A = {len(isoA)} | Voo B = {len(isoB)})
+{_cmp('Torque Médio dentro da Banda', 'E1 Torq ft lbs', 'mean', '{:.0f}', ' lb.ft', isoA, isoB)}
+{_cmp('T5 / ITT Média para o Mesmo Torque', 'E1 ITT', 'mean', '{:.1f}', ' ºC', isoA, isoB)}
+{_cmp('Ng Média para o Mesmo Torque', 'E1 NG', 'mean', '{:.2f}', '%', isoA, isoB)}
+{_cmp('Fluxo de Combustível Médio para o Mesmo Torque', 'E1 FFlow', 'mean', '{:.1f}', '', isoA, isoB)}
+{_cmp('Altitude Média durante a Banda de Iso-Torque', 'AltMSL', 'mean', '{:.0f}', ' ft', isoA, isoB)}
+{_cmp('Velocidade Média (IAS) durante a Banda', 'IAS', 'mean', '{:.1f}', ' kt', isoA, isoB)}
+{linha_raz_itt}
+{linha_raz_ng}"""
+
+                        itt_max_A, itt_max_B = _m(dfA, 'E1 ITT', 'max'), _m(dfB, 'E1 ITT', 'max')
+                        ng_max_A, ng_max_B = _m(dfA, 'E1 NG', 'max'), _m(dfB, 'E1 NG', 'max')
+
+                        lim_itt = l_itt_red if l_itt_red is not None else 790.0
+                        lim_ng = l_ng_red if l_ng_red is not None else 101.5
+                        margem_itt_A = f"{lim_itt - itt_max_A:.0f} ºC" if not np.isnan(itt_max_A) else "N/D"
+                        margem_itt_B = f"{lim_itt - itt_max_B:.0f} ºC" if not np.isnan(itt_max_B) else "N/D"
+                        margem_ng_A = f"{lim_ng - ng_max_A:.1f}%" if not np.isnan(ng_max_A) else "N/D"
+                        margem_ng_B = f"{lim_ng - ng_max_B:.1f}%" if not np.isnan(ng_max_B) else "N/D"
+
+                        durA = formatar_duracao(dfA_v['Datetime'].iloc[-1] - dfA_v['Datetime'].iloc[0]) if len(dfA_v) > 1 else "N/D"
+                        durB = formatar_duracao(dfB_v['Datetime'].iloc[-1] - dfB_v['Datetime'].iloc[0]) if len(dfB_v) > 1 else "N/D"
+
+                        with st.spinner("Executando análise termodinâmica e de tendência de degradação (Voo A vs Voo B)..."):
+                            try:
+                                prompt_trend = f"""
+Atue como um Engenheiro Sênior de Propulsão Aeronáutica e Especialista em Engine Trend Monitoring (ETM) de motores turboélice (Pratt & Whitney PT6A / {projeto_atual}).
+Sua missão é redigir um ESTUDO TÉCNICO EXAUSTIVO comparando o Voo A (Baseline / Referência) com o Voo B (Voo Recente / Avaliado) da MESMA aeronave, quantificando qualquer desvio de performance, perda de eficiência termodinâmica, deriva térmica da Seção Quente (Hot Section) ou alteração de demanda do gerador de gás (Ng).
+
+=== RESTRIÇÃO ABSOLUTA DE ESCOPO ===
+- NÃO forneça resolução de panes, NÃO sugira ações corretivas, NÃO mande abrir motor, trocar componentes, fazer lavagem de compressor ou realizar inspeções de manutenção.
+- Concentre-se 100% na caracterização profunda da performance do motor e da aeronave entre os dois voos, separando o que é variação de perfil/altitude de voo do que é indício físico real de degradação ou mudança de rendimento do motor.
+- FIDELIDADE TOTAL: baseie-se estritamente nos números fornecidos abaixo. Nunca invente valores.
+
+=== 1. CONTEXTO E EQUIVALÊNCIA DOS PERFIS DE VOO ===
+- Aeronave / Perfil: {projeto_atual}
+- Voo A (Referência): {arq_A} | Duração em voo: {durA}
+- Voo B (Avaliado): {arq_B} | Duração em voo: {durB}
+{_cmp('Altitude Média em Voo (AltMSL)', 'AltMSL', 'mean', '{:.0f}', ' ft')}
+{_cmp('Altitude Máxima (Teto)', 'AltMSL', 'max', '{:.0f}', ' ft')}
+{_cmp('Velocidade Média (IAS)', 'IAS', 'mean', '{:.1f}', ' kt')}
+{_cmp('Velocidade Máxima (IAS)', 'IAS', 'max', '{:.1f}', ' kt')}
+{_cmp('Força G Máxima (+)', 'NormAc', 'max', '{:.2f}', ' G')}
+{_cmp('Força G Mínima (-)', 'NormAc', 'min', '{:.2f}', ' G')}
+
+=== 2. COMPARATIVO EM BANDA DE ISO-TORQUE (MESMA CARGA MECÂNICA) ===
+{bloco_isotorque}
+
+=== 3. ESTATÍSTICA COMPLETA DO GRUPO MOTOPROPULSOR (EM VOO) ===
+- TORQUE (lb.ft):
+{_cmp('Torque Médio', 'E1 Torq ft lbs', 'mean', '{:.0f}', ' lb.ft')}
+{_cmp('Torque P95 (Alta Carga Sustentada)', 'E1 Torq ft lbs', 'p95', '{:.0f}', ' lb.ft')}
+{_cmp('Torque Pico Máximo', 'E1 Torq ft lbs', 'max', '{:.0f}', ' lb.ft', dfA, dfB)}
+{_cmp('Torque Desvio-Padrão (Variabilidade)', 'E1 Torq ft lbs', 'std', '{:.0f}', ' lb.ft')}
+
+- TEMPERATURA INTER-TURBINAS T5 / ITT (ºC):
+{_cmp('T5/ITT Média', 'E1 ITT', 'mean', '{:.1f}', ' ºC')}
+{_cmp('T5/ITT P95 (Regime Sustentado)', 'E1 ITT', 'p95', '{:.1f}', ' ºC')}
+{_cmp('T5/ITT Pico Máximo', 'E1 ITT', 'max', '{:.0f}', ' ºC', dfA, dfB)}
+{_cmp('T5/ITT Oscilação (Desvio-Padrão)', 'E1 ITT', 'std', '{:.1f}', ' ºC')}
+- Margem Térmica até Red Line ({lim_itt:.0f} ºC): Voo A = {margem_itt_A} | Voo B = {margem_itt_B}
+
+- GERADOR DE GÁS Ng (%):
+{_cmp('Ng Média', 'E1 NG', 'mean', '{:.2f}', '%')}
+{_cmp('Ng P95 (Alta Rotação Sustentada)', 'E1 NG', 'p95', '{:.2f}', '%')}
+{_cmp('Ng Pico Máximo', 'E1 NG', 'max', '{:.1f}', '%', dfA, dfB)}
+{_cmp('Ng Oscilação (Desvio-Padrão)', 'E1 NG', 'std', '{:.2f}', '%')}
+- Margem de Rotação até Red Line ({lim_ng:.1f}%): Voo A = {margem_ng_A} | Voo B = {margem_ng_B}
+
+- HÉLICE Nh (%) E COMBUSTÍVEL:
+{_cmp('Nh Média', 'E1 NP %', 'mean', '{:.2f}', '%')}
+{_cmp('Nh Máxima', 'E1 NP %', 'max', '{:.1f}', '%', dfA, dfB)}
+{_cmp('Nh Estabilidade (Desvio-Padrão)', 'E1 NP %', 'std', '{:.2f}', '%')}
+{_cmp('Fluxo de Combustível Médio', 'E1 FFlow', 'mean', '{:.1f}', '')}
+{_cmp('Fluxo de Combustível P95', 'E1 FFlow', 'p95', '{:.1f}', '')}
+
+- SISTEMA DE LUBRIFICAÇÃO (MOTOR EM REGIME Ng > 50%):
+{_cmp('Temp. Óleo Média', 'E1 OilT_Celsius', 'mean', '{:.1f}', ' ºC', dfA_m, dfB_m)}
+{_cmp('Temp. Óleo Máxima', 'E1 OilT_Celsius', 'max', '{:.0f}', ' ºC', dfA_m, dfB_m)}
+{_cmp('Pressão Óleo Mínima em Regime', 'E1 OilP', 'min', '{:.0f}', ' PSI', dfA_m, dfB_m)}
+{_cmp('Pressão Óleo Média em Regime', 'E1 OilP', 'mean', '{:.1f}', ' PSI', dfA_m, dfB_m)}
+{_cmp('Pressão Óleo Máxima em Regime', 'E1 OilP', 'max', '{:.0f}', ' PSI', dfA_m, dfB_m)}
+
+=== FORMATO OBRIGATÓRIO ===
+- Escrita altamente técnica, profunda, objetiva e sem emojis.
+- Use `#` para o título principal, `##` para seções, `*` para tópicos e **negrito** para todos os parâmetros, deltas e conclusões quantitativas.
+
+# ESTUDO DETALHADO DE PERFORMANCE E DEGRADAÇÃO DE MOTOR (TREND MONITORING)
+## 1. EQUIVALÊNCIA DE MISSÃO E IMPACTO DO PERFIL DE VOO (ALTITUDE, VELOCIDADE E CARGAS)
+## 2. ANÁLISE DE EFICIÊNCIA EM BANDA DE ISO-TORQUE (DESEMPENHO REAL DO MOTOR)
+## 3. COMPORTAMENTO TÉRMICO (T5/ITT), DERIVA DA SEÇÃO QUENTE E MARGEM TÉRMICA
+## 4. COMPORTAMENTO DO GERADOR DE GÁS (NG), ENTREGA DE TORQUE E GOVERNANÇA DE HÉLICE (NH)
+## 5. FLUXO DE COMBUSTÍVEL E REGIME TERMOMECÂNICO DO SISTEMA DE LUBRIFICAÇÃO
+## 6. CLASSIFICAÇÃO FINAL DA TENDÊNCIA DE PERFORMANCE (ESTÁVEL / DESVIO LEVE / DEGRADAÇÃO ACENTUADA)
+"""
+                                texto_ia_trend = gerar_texto_ia(prompt_trend)
+                                st.session_state.obs_graficos = texto_ia_trend
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Não foi possível gerar o estudo de degradação com IA: {e}")
+
+                    obs_trend_edit = st.text_area(
+                        "Estudo de Performance e Degradação (Editável para o Relatório Word):",
+                        value=st.session_state.obs_graficos,
+                        key="k_trend_rel_ia",
+                        height=300
+                    )
+                    if st.button("CONFIRMAR ESTUDO PARA EXPORTAÇÃO", key="b_trend_conf"):
+                        st.session_state.obs_graficos = obs_trend_edit
+                        st.success("Estudo salvo para exportação.")
+
                     obs_comp_atual = {
-                        "Resumo de Degradacao e Picos (Deltas)": st.session_state.obs_resumo,
-                        "Analise Comportamental Grafica": st.session_state.obs_graficos
+                        "Resumo de Degradação e Picos (Deltas)": st.session_state.obs_resumo,
+                        "Estudo Detalhado de Performance e Degradação": st.session_state.obs_graficos
                     }
 
                     graficos_trend = {
                         "Comparativo de Performance (Voo A vs Voo B)": fig_trend
                     }
 
+                    st.divider()
                     docx_bytes_comp = gerar_docx_comparativo_editado(arq_A, arq_B, df_metricas, obs_comp_atual, graficos_trend)
                     st.download_button(
                         label="EXPORTAR LAUDO DE TREND MONITORING (.DOCX)",
@@ -1995,55 +2277,114 @@ if arquivos_up:
                 st.divider()
                 st.markdown(f"""
                 <div style="background: {T['bg_card_grad']}; border: 1px solid {T['accent']}; border-left: 5px solid {T['accent']}; border-radius: 10px; padding: 16px 20px; margin-bottom: 12px;">
-                    <div style="font-size: 14px; font-weight: 700; color: {T['accent']};">Inteligência Artificial de Inspetoria Aeronáutica (Padrão T-27M)</div>
-                    <div style="font-size: 12.5px; color: {T['txt_sec']}; margin-top: 4px;">Gera automaticamente o Estudo de Caso e o Parecer de Manutenção confrontando os dados do voo com os limites operacionais oficiais do T-27M.</div>
+                    <div style="font-size: 14px; font-weight: 700; color: {T['accent']};">Inteligência Artificial de Análise de Voo e Performance ({projeto_atual})</div>
+                    <div style="font-size: 12.5px; color: {T['txt_sec']}; margin-top: 4px;">Gera automaticamente a análise técnica detalhada do perfil de voo, comportamento aerodinâmico/estrutural da aeronave e performance termodinâmica e mecânica do motor.</div>
                 </div>
                 """, unsafe_allow_html=True)
 
-                if st.button("GERAR PARECER TÉCNICO OFICIAL COM IA", key="btn_ia_solo_rel", use_container_width=True):
+                if st.button("GERAR ANÁLISE TÉCNICA COMPLETA DO VOO COM IA", key="btn_ia_solo_rel", use_container_width=True):
+                    def _safe(df_ref, col, fn="max", fmt="{:.1f}"):
+                        if col not in df_ref.columns:
+                            return "N/D"
+                        s = df_ref[col].dropna()
+                        if s.empty:
+                            return "N/D"
+                        if fn == "max": val = s.max()
+                        elif fn == "min": val = s.min()
+                        elif fn == "mean": val = s.mean()
+                        elif fn == "p95": val = s.quantile(0.95)
+                        elif fn == "std": val = s.std()
+                        else: val = s.max()
+                        return fmt.format(val)
+
+                    df_voo = voo_ativo if not voo_ativo.empty else df
+                    df_mot = df[df['E1 NG'] > 50] if 'E1 NG' in df.columns else df_voo
+
+                    seg_g3 = int((df_voo['NormAc'] >= 3.0).sum()) if 'NormAc' in df_voo.columns else 0
+                    seg_g4 = int((df_voo['NormAc'] >= 4.0).sum()) if 'NormAc' in df_voo.columns else 0
+                    if 'NormAc' in df_voo.columns and not df_voo.empty:
+                        inv = df_voo['NormAc'] < -0.15
+                        seg_inv_max = int(inv.groupby((~inv).cumsum()).sum().max())
+                    else:
+                        seg_inv_max = 0
+
+                    amostras_acro = 0
+                    if 'Pitch' in df_voo.columns and 'Roll' in df_voo.columns:
+                        amostras_acro = int(((df_voo['Pitch'].abs() > 45) | (df_voo['Roll'].abs() > 60)).sum())
+
+                    fase_final = df_voo.tail(300) if not df_voo.empty else df
+                    ias_final = _safe(fase_final, 'IAS', 'mean', '{:.1f}')
+                    g_pouso = _safe(fase_final, 'NormAc', 'max', '{:.2f}')
+
+                    itt_no_tq_max, ng_no_tq_max, alt_no_tq_max = "N/D", "N/D", "N/D"
+                    if 'E1 Torq ft lbs' in df_voo.columns and not df_voo['E1 Torq ft lbs'].dropna().empty:
+                        idx_tq = df_voo['E1 Torq ft lbs'].idxmax()
+                        row_tq = df_voo.loc[idx_tq]
+                        if 'E1 ITT' in df_voo.columns and pd.notna(row_tq['E1 ITT']): itt_no_tq_max = f"{row_tq['E1 ITT']:.0f} ºC"
+                        if 'E1 NG' in df_voo.columns and pd.notna(row_tq['E1 NG']): ng_no_tq_max = f"{row_tq['E1 NG']:.1f}%"
+                        if 'AltMSL' in df_voo.columns and pd.notna(row_tq['AltMSL']): alt_no_tq_max = f"{row_tq['AltMSL']:.0f} ft"
+
                     pico_tq = df['E1 Torq ft lbs'].max() if 'E1 Torq ft lbs' in df.columns else 0
                     pico_itt = df['E1 ITT'].max() if 'E1 ITT' in df.columns else 0
                     pico_ng = df['E1 NG'].max() if 'E1 NG' in df.columns else 0
                     pico_nh = df['E1 NP %'].max() if 'E1 NP %' in df.columns else 0
 
-                    with st.spinner("Analisando telemetria e redigindo parecer técnico no padrão FAB..."):
+                    with st.spinner("Processando análise completa do perfil de voo, célula e motor..."):
                         try:
-                            texto_alertas = ", ".join(alertas) if alertas else "Nenhum alerta. Voo dentro dos limites normais."
+                            texto_alertas = "\n".join([f"- {a}" for a in alertas]) if alertas else "- Nenhuma excedência de arco amarelo ou vermelho registrada."
 
                             prompt = f"""
-                            Atue como um Inspetor Sênior de Manutenção e Avaliador de Telemetria da Força Aérea Brasileira (especialista na aeronave T-27M Tucano e motor Pratt & Whitney PT6A-25C).
-                            O seu objetivo é emitir um Parecer Técnico Oficial e um Estudo de Caso aprofundado, baseado estritamente nos dados deste voo e nos limites oficiais da aeronave.
+Atue como um Engenheiro de Ensaios em Voo e Especialista em Telemetria Aeronáutica (FDM), especialista na aeronave {projeto_atual}.
+Sua tarefa é elaborar uma ANÁLISE TÉCNICA INTEGRAL E MINUCIOSA do voo realizado, detalhando o perfil operacional, o comportamento aerodinâmico e estrutural da aeronave (ANV) e a performance termodinâmica e mecânica do motor.
 
-                            LIMITES OPERACIONAIS OFICIAIS DO T-27M (REFERÊNCIA):
-                            - Torque Máx Decolagem: 1795 lb.ft
-                            - Temperatura T5 (ITT) Máx: Partida 1090°C (2s) | Aceleração 850°C (2s) | Decolagem 790°C | Subida 765°C | Cruzeiro 740°C
-                            - Ng Máx (Decolagem/Subida/Cruzeiro): 101,5%
-                            - Nh Máx (Decolagem/Subida/Cruzeiro): 100%
-                            - Voo Invertido na Instrução: Máximo 15 segundos
-                            - Limites de Aceleração (Força G): -3G a +6G (flapes recolhidos) e 0G a +2G (flapes baixados)
-                            - Luz Pressão do Óleo: Abaixo de 40 psi
+=== RESTRIÇÃO ABSOLUTA DE ESCOPO ===
+- NÃO faça diagnóstico de panes, NÃO sugira resolução de panes, NÃO recomende troca de peças, boroscopia, abertura de ordens de serviço ou ações corretivas de manutenção.
+- Limite-se 100% à descrição técnica profunda e à interpretação física/operacional do que ocorreu no voo e da performance entregue pela aeronave e pelo grupo motopropulsor.
+- FIDELIDADE TOTAL: utilize exclusivamente os dados fornecidos abaixo. Nunca invente valores, horários ou eventos.
 
-                            DADOS DE PICO COLETADOS NESTA MISSÃO:
-                            - Força G: Máxima {max_g:.2f}G | Mínima {min_g:.2f}G
-                            - Motor (Torque Máx): {pico_tq:.0f} lb.ft
-                            - Motor (Temperatura T5 / ITT Máx): {pico_itt:.0f} ºC
-                            - Motor (Rotação Ng Máx): {pico_ng:.1f}%
-                            - Motor (Hélice Nh Máx): {pico_nh:.1f}%
-                            - Ocorrências e Alertas de Ultrapassagem: {texto_alertas}
+=== 1. CRONOLOGIA DA MISSÃO ===
+- Aeronave / Perfil: {projeto_atual} ({tipo_projeto} | {qtd_motores_config} motor(es))
+- Acionamento: {tempos.get('acionamento', 'N/D')} | Decolagem: {tempos.get('decolagem', 'N/D')}
+- Pouso: {tempos.get('pouso', 'N/D')} | Corte: {tempos.get('corte', 'N/D')}
+- Tempo Efetivo de Voo: {tempos.get('t_voo', 'N/D')}
 
-                            DIRETRIZES DE FORMATAÇÃO (ESTRUTURA VISUAL OBRIGATÓRIA):
-                            - PROIBIDO escrever texto corrido tipo dissertação. O laudo deve ser altamente escaneável e estruturado.
-                            - NÃO utilize emojis no documento. Mantenha tom estritamente militar e técnico.
-                            - Use Markdown para criar hierarquia visual: utilize `#` para o Título Principal e `##` para Subtítulos.
-                            - Use listas de marcadores (bullet points) extensivamente para listar eventos.
-                            - Destaque em **negrito** todos os valores numéricos, nomes de sensores (T5/ITT, Ng, Nh, Torque) e peças críticas.
+=== 2. ENVELOPE AERODINÂMICO, ATITUDES E CARGAS ESTRUTURAIS (EM VOO) ===
+- Altitude MSL: Média {_safe(df_voo, 'AltMSL', 'mean', '{:.0f}')} ft | Máxima {_safe(df_voo, 'AltMSL', 'max', '{:.0f}')} ft
+- Velocidade Indicada (IAS): Média {_safe(df_voo, 'IAS', 'mean', '{:.1f}')} kt | P95 {_safe(df_voo, 'IAS', 'p95', '{:.1f}')} kt | Máxima {_safe(df_voo, 'IAS', 'max', '{:.1f}')} kt
+- Atitude de Arfagem (Pitch): Mínima {_safe(df_voo, 'Pitch', 'min', '{:.1f}')}º | Máxima {_safe(df_voo, 'Pitch', 'max', '{:.1f}')}º
+- Atitude de Rolagem (Roll): Mínima {_safe(df_voo, 'Roll', 'min', '{:.1f}')}º | Máxima {_safe(df_voo, 'Roll', 'max', '{:.1f}')}º
+- Amostras em Atitudes Elevadas (|Pitch|>45º ou |Roll|>60º): {amostras_acro} registros
+- Fator de Carga (Força G): Máximo +{max_g:.2f}G | Mínimo {min_g:.2f}G | Média em voo {_safe(df_voo, 'NormAc', 'mean', '{:.2f}')}G
+- Exposição a Cargas Elevadas: {seg_g3} amostras >= +3.0G | {seg_g4} amostras >= +4.0G | Maior sequência em voo invertido (<-0.15G): {seg_inv_max}s
+- Fase Final e Toque (últimas 300 amostras em voo): IAS média {ias_final} kt | Pico de impacto no pouso {g_pouso}G
 
-                            ESTRUTURA EXATA EXIGIDA PARA O LAUDO:
-                            # RELATÓRIO DE INSPETORIA TÉCNICA E TELEMETRIA
-                            ## 1. VISÃO GERAL E DINÂMICA DE VOO
-                            ## 2. ESTUDO DE CASO: OCORRÊNCIAS E PICOS DE ESFORÇO
-                            ## 3. DIAGNÓSTICO E RECOMENDAÇÕES DE MANUTENÇÃO
-                            """
+=== 3. PERFORMANCE DO GRUPO MOTOPROPULSOR (MOTOR 1) ===
+- Torque (em voo): Média {_safe(df_voo, 'E1 Torq ft lbs', 'mean', '{:.0f}')} lb.ft | P95 {_safe(df_voo, 'E1 Torq ft lbs', 'p95', '{:.0f}')} lb.ft | Pico Máximo {_safe(df, 'E1 Torq ft lbs', 'max', '{:.0f}')} lb.ft | Desvio-Padrão {_safe(df_voo, 'E1 Torq ft lbs', 'std', '{:.0f}')} lb.ft
+- Temperatura T5 / ITT (em voo): Média {_safe(df_voo, 'E1 ITT', 'mean', '{:.0f}')} ºC | P95 {_safe(df_voo, 'E1 ITT', 'p95', '{:.0f}')} ºC | Pico Máximo {_safe(df, 'E1 ITT', 'max', '{:.0f}')} ºC
+- Gerador de Gás Ng (em voo): Média {_safe(df_voo, 'E1 NG', 'mean', '{:.1f}')}% | P95 {_safe(df_voo, 'E1 NG', 'p95', '{:.1f}')}% | Pico Máximo {_safe(df, 'E1 NG', 'max', '{:.1f}')}%
+- Rotação da Hélice Nh (em voo): Mínima {_safe(df_voo, 'E1 NP %', 'min', '{:.1f}')}% | Média {_safe(df_voo, 'E1 NP %', 'mean', '{:.1f}')}% | Pico Máximo {_safe(df, 'E1 NP %', 'max', '{:.1f}')}%
+- Fluxo de Combustível (FFlow): Médio {_safe(df_voo, 'E1 FFlow', 'mean', '{:.1f}')} | P95 {_safe(df_voo, 'E1 FFlow', 'p95', '{:.1f}')} | Máximo {_safe(df, 'E1 FFlow', 'max', '{:.1f}')}
+- Acoplamento no Instante do Torque Máximo: T5/ITT = {itt_no_tq_max} | Ng = {ng_no_tq_max} | Altitude = {alt_no_tq_max}
+- Sistema de Lubrificação (Motor em regime Ng > 50%): Temp. Óleo Média {_safe(df_mot, 'E1 OilT_Celsius', 'mean', '{:.0f}')} ºC / Máx {_safe(df_mot, 'E1 OilT_Celsius', 'max', '{:.0f}')} ºC | Pressão Óleo Mín {_safe(df_mot, 'E1 OilP', 'min', '{:.0f}')} PSI / Média {_safe(df_mot, 'E1 OilP', 'mean', '{:.0f}')} PSI / Máx {_safe(df_mot, 'E1 OilP', 'max', '{:.0f}')} PSI
+
+=== 4. LIMITES DE REFERÊNCIA ({projeto_atual}) ===
+- Força G: {l_g_min}G a +{l_g_max}G | Torque Red Line: {l_tq_red} lb.ft | T5/ITT Red Line: {l_itt_red} ºC (Amarelo: {l_itt_yel} ºC)
+- Ng Red Line: {l_ng_red}% | Nh Red Line: {l_nh_red}% | OilT Máx: {l_oilt_red} ºC | OilP Mín/Máx: {l_oilp_min} / {l_oilp_red} PSI
+
+=== 5. EVENTOS E EXCEDÊNCIAS DETECTADAS ===
+{texto_alertas}
+
+=== FORMATO OBRIGATÓRIO (COMPATÍVEL COM WORD) ===
+- Tom técnico-aeronáutico rigoroso, descritivo e analítico. Sem emojis.
+- Use `#` para o título principal, `##` para seções, `*` para tópicos detalhados e **negrito** para todos os sensores e valores numéricos.
+
+# ANÁLISE TÉCNICA DETALHADA DE VOO E PERFORMANCE (SOLO)
+## 1. PERFIL OPERACIONAL E CRONOLOGIA DA MISSÃO
+## 2. DESEMPENHO AERODINÂMICO, ATITUDES E ENVELOPE ESTRUTURAL (ANV)
+## 3. PERFORMANCE DO GRUPO MOTOPROPULSOR (TERMODINÂMICA, TORQUE E HÉLICE)
+## 4. COMPORTAMENTO DO SISTEMA DE LUBRIFICAÇÃO E FASE DE POUSO
+## 5. MARGENS OPERACIONAIS E DETALHAMENTO DE EVENTOS REGISTRADOS
+"""
 
                             texto_ia_solo = gerar_texto_ia(prompt)
                             st.session_state.obs_graficos = texto_ia_solo
@@ -2054,7 +2395,7 @@ if arquivos_up:
                             )
                             st.rerun()
 
-                obs_graf_tmp_rel = st.text_area("Parecer Técnico da Inspetoria (Editável para o Documento Oficial):", value=st.session_state.obs_graficos, key='k_graf_rel', height=260)
+                obs_graf_tmp_rel = st.text_area("Análise Técnica do Voo (Editável para o Documento Oficial):", value=st.session_state.obs_graficos, key='k_graf_rel', height=280)
                 if st.button("CONFIRMAR ALTERAÇÕES NO PARECER", key="b_graf_rel"):
                     st.session_state.obs_graficos = obs_graf_tmp_rel
                     st.success("Parecer atualizado e pronto para exportação.")
