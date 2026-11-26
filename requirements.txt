@@ -1,8 +1,8 @@
 streamlit
 pandas
 numpy
-plotly
+plotly==5.24.1
 simplekml
 python-docx
 requests
-kaleido
+kaleido==0.2.1
