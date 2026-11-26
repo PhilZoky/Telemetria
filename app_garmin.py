@@ -402,6 +402,14 @@ def gerar_parecer_contingencia(max_g, min_g, pico_tq, pico_itt, pico_ng, pico_nh
 ## 3. EVENTOS E EXCEDÊNCIAS REGISTRADAS
 {bloco_alertas}"""
 
+SYSTEM_PROMPT_FDM = """Você é um Engenheiro de Ensaios em Voo e Analista de Telemetria Aeronáutica (FDM).
+REGRAS INVIOLÁVEIS:
+1. USE APENAS OS DADOS FORNECIDOS NO PROMPT. Nunca invente horários, durações, clima, pressão atmosférica (hPa), peso/toneladas ou valores de sensores.
+2. UNIDADES PERMITIDAS EXCLUSIVAMENTE: ft, kt, G, º (graus de Pitch/Roll), lb.ft (Torque), ºC (T5/ITT e OilT), % (Ng e Nh), PSI (OilP) e m (metros na formatura).
+3. ESTRITAMENTE PROIBIDO mencionar ou calcular: kW, HP, potência elétrica, desempenho aeroelétrico, kg/s, toneladas, hPa, OAT/temperatura ambiente ou qualquer parâmetro que não esteja nos dados enviados.
+4. NÃO sugira resolução de panes, troca de peças, boroscopia ou ações corretivas de manutenção. Descreva exclusivamente o voo, a aeronave e a performance entregue pelo motor.
+5. Escreva em português técnico correto e fluente, sem repetir seções e sem usar emojis."""
+
 def gerar_texto_ia(prompt_texto):
     credencial = obter_credencial_ia()
     if not credencial:
@@ -412,57 +420,75 @@ def gerar_texto_ia(prompt_texto):
             "Content-Type": "application/json",
             "Authorization": f"Bearer {credencial}"
         }
-        modelos_groq = [
+        modelos_preferidos = [
             "llama-3.3-70b-versatile",
-            "llama-3.1-8b-instant",
+            "meta-llama/llama-4-maverick-17b-128e-instruct",
+            "meta-llama/llama-4-scout-17b-16e-instruct",
+            "qwen/qwen3-32b",
+            "openai/gpt-oss-120b",
             "llama3-70b-8192",
-            "llama3-8b-8192",
-            "gemma2-9b-it"
+            "llama-3.1-8b-instant"
         ]
         try:
             r_mod = requests.get("https://api.groq.com/openai/v1/models", headers=headers, timeout=10)
             if r_mod.status_code == 200:
+                bloqueados = ["whisper", "guard", "tts", "vision", "embed", "playai", "allam", "compound"]
                 ativos = [
                     m["id"] for m in r_mod.json().get("data", [])
-                    if not any(x in m["id"].lower() for x in ["whisper", "guard", "tts", "vision", "embed"])
+                    if not any(x in m["id"].lower() for x in bloqueados)
                 ]
-                preferidos = [m for m in modelos_groq if m in ativos]
-                outros = [m for m in ativos if m not in preferidos]
-                if preferidos or outros:
-                    modelos_groq = preferidos + outros
+                # Prioriza sempre modelos grandes (70B/120B/32B) e joga 8B/9B para o fim
+                ordenados = [m for m in modelos_preferidos if m in ativos]
+                restantes_grandes = [
+                    m for m in ativos
+                    if m not in ordenados and not any(p in m.lower() for p in ["8b", "9b", "7b", "3b", "1b"])
+                ]
+                restantes_pequenos = [m for m in ativos if m not in ordenados and m not in restantes_grandes]
+                if ordenados or restantes_grandes or restantes_pequenos:
+                    modelos_preferidos = ordenados + restantes_grandes + restantes_pequenos
         except Exception:
             pass
 
         ultimo_erro_groq = ""
         url = "https://api.groq.com/openai/v1/chat/completions"
 
-        for mod in modelos_groq:
+        for mod in modelos_preferidos:
             payload = {
                 "model": mod,
-                "messages": [{"role": "user", "content": prompt_texto}],
-                "temperature": 0.25
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT_FDM},
+                    {"role": "user", "content": prompt_texto}
+                ],
+                "temperature": 0.1
             }
             resp = requests.post(url, headers=headers, json=payload, timeout=60)
             if resp.status_code == 200:
+                st.session_state["ultimo_modelo_ia"] = mod
                 return resp.json()["choices"][0]["message"]["content"]
             ultimo_erro_groq = f"Erro na Groq ({resp.status_code}) [{mod}]: {resp.text}"
 
         raise RuntimeError(ultimo_erro_groq)
 
-    modelos_tentativa = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash"]
-    payload = {"contents": [{"parts": [{"text": prompt_texto}]}]}
+    modelos_tentativa = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"]
+    payload = {
+        "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT_FDM}]},
+        "contents": [{"parts": [{"text": prompt_texto}]}],
+        "generationConfig": {"temperature": 0.1}
+    }
     ultimo_erro = ""
 
     for mod in modelos_tentativa:
         url_key = f"https://generativelanguage.googleapis.com/v1beta/models/{mod}:generateContent?key={credencial}"
         resp = requests.post(url_key, headers={"Content-Type": "application/json"}, json=payload, timeout=60)
         if resp.status_code == 200:
+            st.session_state["ultimo_modelo_ia"] = mod
             return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
         if credencial.startswith("AQ."):
             url_bearer = f"https://generativelanguage.googleapis.com/v1beta/models/{mod}:generateContent"
             headers_b = {"Content-Type": "application/json", "Authorization": f"Bearer {credencial}"}
             resp_b = requests.post(url_bearer, headers=headers_b, json=payload, timeout=60)
             if resp_b.status_code == 200:
+                st.session_state["ultimo_modelo_ia"] = mod
                 return resp_b.json()["candidates"][0]["content"]["parts"][0]["text"]
         ultimo_erro = f"Status {resp.status_code} [{mod}]: {resp.text}"
 
@@ -1629,7 +1655,8 @@ Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura, comp
                                     texto_ia_form = gerar_texto_ia(prompt_form)
                                     st.session_state.obs_comparativo = texto_ia_form
                                     st.session_state["_sync_form_ia"] = True
-                                    st.session_state.status_ia_form = ("ok", "Análise de formatura gerada pela IA com sucesso.")
+                                    mod_usado = st.session_state.get("ultimo_modelo_ia", "IA")
+                                    st.session_state.status_ia_form = ("ok", f"Análise de formatura gerada com sucesso (modelo: {mod_usado}).")
                                     st.rerun()
                                 except Exception as e:
                                     dist_med = df_merge['Distancia_m'].mean() if 'Distancia_m' in df_merge.columns else 0
@@ -2387,62 +2414,56 @@ Sua missão é redigir um ESTUDO TÉCNICO EXAUSTIVO comparando o Voo A (Baseline
                             texto_alertas = "\n".join([f"- {a}" for a in alertas]) if alertas else "- Nenhuma excedência de arco amarelo ou vermelho registrada."
 
                             prompt = f"""
-Atue como um Engenheiro de Ensaios em Voo e Especialista em Telemetria Aeronáutica (FDM), especialista na aeronave {projeto_atual}.
-Sua tarefa é elaborar uma ANÁLISE TÉCNICA INTEGRAL E MINUCIOSA do voo realizado, detalhando o perfil operacional, o comportamento aerodinâmico e estrutural da aeronave (ANV) e a performance termodinâmica e mecânica do motor.
+Elabore uma ANÁLISE TÉCNICA DETALHADA do voo abaixo, analisando EXCLUSIVAMENTE os parâmetros monitorados pela telemetria da aeronave {projeto_atual}.
 
-=== RESTRIÇÃO ABSOLUTA DE ESCOPO ===
-- NÃO faça diagnóstico de panes, NÃO sugira resolução de panes, NÃO recomende troca de peças, boroscopia, abertura de ordens de serviço ou ações corretivas de manutenção.
-- Limite-se 100% à descrição técnica profunda e à interpretação física/operacional do que ocorreu no voo e da performance entregue pela aeronave e pelo grupo motopropulsor.
-- FIDELIDADE TOTAL: utilize exclusivamente os dados fornecidos abaixo. Nunca invente valores, horários ou eventos.
-
-=== 1. CRONOLOGIA DA MISSÃO ===
+=== 1. CRONOLOGIA REAL DO VOO ===
 - Aeronave / Perfil: {projeto_atual} ({tipo_projeto} | {qtd_motores_config} motor(es))
 - Acionamento: {tempos.get('acionamento', 'N/D')} | Decolagem: {tempos.get('decolagem', 'N/D')}
 - Pouso: {tempos.get('pouso', 'N/D')} | Corte: {tempos.get('corte', 'N/D')}
 - Tempo Efetivo de Voo: {tempos.get('t_voo', 'N/D')}
 
-=== 2. ENVELOPE AERODINÂMICO, ATITUDES E CARGAS ESTRUTURAIS (EM VOO) ===
-- Altitude MSL: Média {_safe(df_voo, 'AltMSL', 'mean', '{:.0f}')} ft | Máxima {_safe(df_voo, 'AltMSL', 'max', '{:.0f}')} ft
-- Velocidade Indicada (IAS): Média {_safe(df_voo, 'IAS', 'mean', '{:.1f}')} kt | P95 {_safe(df_voo, 'IAS', 'p95', '{:.1f}')} kt | Máxima {_safe(df_voo, 'IAS', 'max', '{:.1f}')} kt
-- Atitude de Arfagem (Pitch): Mínima {_safe(df_voo, 'Pitch', 'min', '{:.1f}')}º | Máxima {_safe(df_voo, 'Pitch', 'max', '{:.1f}')}º
-- Atitude de Rolagem (Roll): Mínima {_safe(df_voo, 'Roll', 'min', '{:.1f}')}º | Máxima {_safe(df_voo, 'Roll', 'max', '{:.1f}')}º
-- Amostras em Atitudes Elevadas (|Pitch|>45º ou |Roll|>60º): {amostras_acro} registros
-- Fator de Carga (Força G): Máximo +{max_g:.2f}G | Mínimo {min_g:.2f}G | Média em voo {_safe(df_voo, 'NormAc', 'mean', '{:.2f}')}G
-- Exposição a Cargas Elevadas: {seg_g3} amostras >= +3.0G | {seg_g4} amostras >= +4.0G | Maior sequência em voo invertido (<-0.15G): {seg_inv_max}s
-- Fase Final e Toque (últimas 300 amostras em voo): IAS média {ias_final} kt | Pico de impacto no pouso {g_pouso}G
+=== 2. PARÂMETROS DE VOO, ATITUDE E CÉLULA (EM VOO) ===
+- Altitude MSL (ft): Média {_safe(df_voo, 'AltMSL', 'mean', '{:.0f}')} ft | Máxima {_safe(df_voo, 'AltMSL', 'max', '{:.0f}')} ft
+- Velocidade Indicada IAS (kt): Média {_safe(df_voo, 'IAS', 'mean', '{:.1f}')} kt | P95 {_safe(df_voo, 'IAS', 'p95', '{:.1f}')} kt | Máxima {_safe(df_voo, 'IAS', 'max', '{:.1f}')} kt
+- Arfagem Pitch (º): Mínima {_safe(df_voo, 'Pitch', 'min', '{:.1f}')}º | Máxima {_safe(df_voo, 'Pitch', 'max', '{:.1f}')}º
+- Rolagem Roll (º): Mínima {_safe(df_voo, 'Roll', 'min', '{:.1f}')}º | Máxima {_safe(df_voo, 'Roll', 'max', '{:.1f}')}º
+- Registros em Atitude Elevada (|Pitch| > 45º ou |Roll| > 60º): {amostras_acro} amostras
+- Força G (NormAc): Mínima {min_g:.2f}G | Média {_safe(df_voo, 'NormAc', 'mean', '{:.2f}')}G | Máxima +{max_g:.2f}G (Limites: {l_g_min}G a +{l_g_max}G)
+- Exposição a Cargas G: {seg_g3} amostras >= +3.0G | {seg_g4} amostras >= +4.0G | Maior sequência em voo invertido (<-0.15G): {seg_inv_max}s
+- Aproximação Final e Pouso (últimas 300 amostras em voo): IAS média {ias_final} kt | Pico de Força G no toque {g_pouso}G
 
-=== 3. PERFORMANCE DO GRUPO MOTOPROPULSOR (MOTOR 1) ===
-- Torque (em voo): Média {_safe(df_voo, 'E1 Torq ft lbs', 'mean', '{:.0f}')} lb.ft | P95 {_safe(df_voo, 'E1 Torq ft lbs', 'p95', '{:.0f}')} lb.ft | Pico Máximo {_safe(df, 'E1 Torq ft lbs', 'max', '{:.0f}')} lb.ft | Desvio-Padrão {_safe(df_voo, 'E1 Torq ft lbs', 'std', '{:.0f}')} lb.ft
-- Temperatura T5 / ITT (em voo): Média {_safe(df_voo, 'E1 ITT', 'mean', '{:.0f}')} ºC | P95 {_safe(df_voo, 'E1 ITT', 'p95', '{:.0f}')} ºC | Pico Máximo {_safe(df, 'E1 ITT', 'max', '{:.0f}')} ºC
-- Gerador de Gás Ng (em voo): Média {_safe(df_voo, 'E1 NG', 'mean', '{:.1f}')}% | P95 {_safe(df_voo, 'E1 NG', 'p95', '{:.1f}')}% | Pico Máximo {_safe(df, 'E1 NG', 'max', '{:.1f}')}%
-- Rotação da Hélice Nh (em voo): Mínima {_safe(df_voo, 'E1 NP %', 'min', '{:.1f}')}% | Média {_safe(df_voo, 'E1 NP %', 'mean', '{:.1f}')}% | Pico Máximo {_safe(df, 'E1 NP %', 'max', '{:.1f}')}%
-- Fluxo de Combustível (FFlow): Médio {_safe(df_voo, 'E1 FFlow', 'mean', '{:.1f}')} | P95 {_safe(df_voo, 'E1 FFlow', 'p95', '{:.1f}')} | Máximo {_safe(df, 'E1 FFlow', 'max', '{:.1f}')}
-- Acoplamento no Instante do Torque Máximo: T5/ITT = {itt_no_tq_max} | Ng = {ng_no_tq_max} | Altitude = {alt_no_tq_max}
-- Sistema de Lubrificação (Motor em regime Ng > 50%): Temp. Óleo Média {_safe(df_mot, 'E1 OilT_Celsius', 'mean', '{:.0f}')} ºC / Máx {_safe(df_mot, 'E1 OilT_Celsius', 'max', '{:.0f}')} ºC | Pressão Óleo Mín {_safe(df_mot, 'E1 OilP', 'min', '{:.0f}')} PSI / Média {_safe(df_mot, 'E1 OilP', 'mean', '{:.0f}')} PSI / Máx {_safe(df_mot, 'E1 OilP', 'max', '{:.0f}')} PSI
+=== 3. PARÂMETROS DO MOTOR 1 ===
+- Torque (lb.ft): Média em voo {_safe(df_voo, 'E1 Torq ft lbs', 'mean', '{:.0f}')} lb.ft | P95 {_safe(df_voo, 'E1 Torq ft lbs', 'p95', '{:.0f}')} lb.ft | Pico Máximo {_safe(df, 'E1 Torq ft lbs', 'max', '{:.0f}')} lb.ft | Oscilação (Std) {_safe(df_voo, 'E1 Torq ft lbs', 'std', '{:.0f}')} lb.ft (Limite Red Line: {l_tq_red} lb.ft)
+- Temperatura T5 / ITT (ºC): Média em voo {_safe(df_voo, 'E1 ITT', 'mean', '{:.0f}')} ºC | P95 {_safe(df_voo, 'E1 ITT', 'p95', '{:.0f}')} ºC | Pico Máximo {_safe(df, 'E1 ITT', 'max', '{:.0f}')} ºC (Amarelo: {l_itt_yel} ºC | Red Line: {l_itt_red} ºC)
+- Gerador de Gás Ng (%): Média em voo {_safe(df_voo, 'E1 NG', 'mean', '{:.1f}')}% | P95 {_safe(df_voo, 'E1 NG', 'p95', '{:.1f}')}% | Pico Máximo {_safe(df, 'E1 NG', 'max', '{:.1f}')}% (Amarelo: {l_ng_yel}% | Red Line: {l_ng_red}%)
+- Rotação da Hélice Nh (%): Mínima em voo {_safe(df_voo, 'E1 NP %', 'min', '{:.1f}')}% | Média {_safe(df_voo, 'E1 NP %', 'mean', '{:.1f}')}% | Pico Máximo {_safe(df, 'E1 NP %', 'max', '{:.1f}')}% (Red Line: {l_nh_red}%)
+- Relação no Instante do Torque Máximo: T5/ITT = {itt_no_tq_max} | Ng = {ng_no_tq_max} | Altitude = {alt_no_tq_max}
 
-=== 4. LIMITES DE REFERÊNCIA ({projeto_atual}) ===
-- Força G: {l_g_min}G a +{l_g_max}G | Torque Red Line: {l_tq_red} lb.ft | T5/ITT Red Line: {l_itt_red} ºC (Amarelo: {l_itt_yel} ºC)
-- Ng Red Line: {l_ng_red}% | Nh Red Line: {l_nh_red}% | OilT Máx: {l_oilt_red} ºC | OilP Mín/Máx: {l_oilp_min} / {l_oilp_red} PSI
+=== 4. SISTEMA DE LUBRIFICAÇÃO (MOTOR EM REGIME Ng > 50%) ===
+- Temperatura do Óleo (OilT): Média {_safe(df_mot, 'E1 OilT_Celsius', 'mean', '{:.0f}')} ºC | Máxima {_safe(df_mot, 'E1 OilT_Celsius', 'max', '{:.0f}')} ºC (Limite Red Line: {l_oilt_red} ºC)
+- Pressão do Óleo (OilP): Mínima {_safe(df_mot, 'E1 OilP', 'min', '{:.0f}')} PSI | Média {_safe(df_mot, 'E1 OilP', 'mean', '{:.0f}')} PSI | Máxima {_safe(df_mot, 'E1 OilP', 'max', '{:.0f}')} PSI (Faixa: {l_oilp_min} a {l_oilp_red} PSI)
 
-=== 5. EVENTOS E EXCEDÊNCIAS DETECTADAS ===
+=== 5. EXCEDÊNCIAS DETECTADAS PELO SISTEMA ===
 {texto_alertas}
 
-=== FORMATO OBRIGATÓRIO (COMPATÍVEL COM WORD) ===
-- Tom técnico-aeronáutico rigoroso, descritivo e analítico. Sem emojis.
-- Use `#` para o título principal, `##` para seções, `*` para tópicos detalhados e **negrito** para todos os sensores e valores numéricos.
+=== INSTRUÇÕES DE ESTRUTURA (OBRIGATÓRIO) ===
+- NÃO mencione kW, HP, kg/s, toneladas, pressão atmosférica ou clima.
+- Na seção 5, analise cada excedência listada acima informando horário, altitude e velocidade — destacando explicitamente se ocorreu no solo (Vel: 0 kt) ou em voo.
+- Use exatamente `#`, `##`, `*` e **negrito** para os valores e sensores.
 
 # ANÁLISE TÉCNICA DETALHADA DE VOO E PERFORMANCE (SOLO)
-## 1. PERFIL OPERACIONAL E CRONOLOGIA DA MISSÃO
-## 2. DESEMPENHO AERODINÂMICO, ATITUDES E ENVELOPE ESTRUTURAL (ANV)
-## 3. PERFORMANCE DO GRUPO MOTOPROPULSOR (TERMODINÂMICA, TORQUE E HÉLICE)
-## 4. COMPORTAMENTO DO SISTEMA DE LUBRIFICAÇÃO E FASE DE POUSO
-## 5. MARGENS OPERACIONAIS E DETALHAMENTO DE EVENTOS REGISTRADOS
+## 1. CRONOLOGIA E PERFIL DE VOO (ALTITUDE E VELOCIDADE)
+## 2. ATITUDES, ENVELOPE ESTRUTURAL (FORÇA G) E POUSO
+## 3. PERFORMANCE DO MOTOR (TORQUE, T5/ITT, NG E NH)
+## 4. SISTEMA DE LUBRIFICAÇÃO (OILT E OILP)
+## 5. DETALHAMENTO DAS EXCEDÊNCIAS E MARGENS OPERACIONAIS
 """
 
                             texto_ia_solo = gerar_texto_ia(prompt)
                             st.session_state.obs_graficos = texto_ia_solo
                             st.session_state["_sync_solo_ia"] = True
-                            st.session_state.status_ia_solo = ("ok", "Análise técnica gerada pela IA com sucesso.")
+                            mod_usado = st.session_state.get("ultimo_modelo_ia", "IA")
+                            st.session_state.status_ia_solo = ("ok", f"Análise técnica gerada com sucesso (modelo: {mod_usado}).")
                             st.rerun()
                         except Exception as e:
                             st.session_state.obs_graficos = gerar_parecer_contingencia(
