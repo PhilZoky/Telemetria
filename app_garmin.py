@@ -405,7 +405,7 @@ def gerar_parecer_contingencia(max_g, min_g, pico_tq, pico_itt, pico_ng, pico_nh
 def gerar_texto_ia(prompt_texto):
     credencial = obter_credencial_ia()
     if not credencial:
-        raise RuntimeError("Chave de API não configurada.")
+        raise RuntimeError("Chave de API não configurada em st.secrets['GEMINI_API_KEY'].")
 
     if credencial.startswith("gsk_"):
         headers = {
@@ -449,7 +449,7 @@ def gerar_texto_ia(prompt_texto):
 
         raise RuntimeError(ultimo_erro_groq)
 
-    modelos_tentativa = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-pro"]
+    modelos_tentativa = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash"]
     payload = {"contents": [{"parts": [{"text": prompt_texto}]}]}
     ultimo_erro = ""
 
@@ -464,7 +464,7 @@ def gerar_texto_ia(prompt_texto):
             resp_b = requests.post(url_bearer, headers=headers_b, json=payload, timeout=60)
             if resp_b.status_code == 200:
                 return resp_b.json()["candidates"][0]["content"]["parts"][0]["text"]
-        ultimo_erro = f"Status {resp.status_code}: {resp.text}"
+        ultimo_erro = f"Status {resp.status_code} [{mod}]: {resp.text}"
 
     raise RuntimeError(f"Não foi possível autenticar na API. Detalhe: {ultimo_erro}")
 
@@ -639,7 +639,7 @@ perfis_salvos = carregar_perfis()
 
 
 # ==========================================
-# 2. INICIALIZAÇÃO DE VARIÁVEIS DE SESSÃO
+# 2. INICIALIZAÇÃO DE VARIÁVEIS DE SESSÃO E SINCRONIZAÇÃO DE IA
 # ==========================================
 obs_keys = [
     'obs_resumo',
@@ -653,6 +653,34 @@ obs_keys = [
 for k in obs_keys:
     if k not in st.session_state:
         st.session_state[k] = ""
+
+for sk in ["status_ia_solo", "status_ia_form", "status_ia_trend"]:
+    if sk not in st.session_state:
+        st.session_state[sk] = None
+
+# Sincroniza as keys dos st.text_area ANTES de os widgets serem desenhados na tela
+if st.session_state.pop("_sync_solo_ia", False):
+    st.session_state["k_graf_rel"] = st.session_state.obs_graficos
+    st.session_state["k_graf_manual"] = st.session_state.obs_graficos
+
+if st.session_state.pop("_sync_form_ia", False):
+    st.session_state["k_form_rel_ia"] = st.session_state.obs_comparativo
+    st.session_state["k_comp"] = st.session_state.obs_comparativo
+
+if st.session_state.pop("_sync_trend_ia", False):
+    st.session_state["k_trend_rel_ia"] = st.session_state.obs_graficos
+    st.session_state["k_comp_graficos"] = st.session_state.obs_graficos
+
+for _wk, _orig in [
+    ("k_graf_rel", "obs_graficos"),
+    ("k_graf_manual", "obs_graficos"),
+    ("k_form_rel_ia", "obs_comparativo"),
+    ("k_comp", "obs_comparativo"),
+    ("k_trend_rel_ia", "obs_graficos"),
+    ("k_comp_graficos", "obs_graficos"),
+]:
+    if _wk not in st.session_state:
+        st.session_state[_wk] = st.session_state[_orig]
 
 
 # ==========================================
@@ -1487,10 +1515,11 @@ if arquivos_up:
 
                         st.divider()
                         st.markdown("**Observações - Sincronismo de Potência e Motores**")
-                        obs_comp_tmp = st.text_area("Escreva aqui:", value=st.session_state.obs_comparativo, key='k_comp')
+                        obs_comp_tmp = st.text_area("Escreva aqui:", key='k_comp')
                         if st.button("SALVAR COMENTÁRIO", key="b_comp"):
                             st.session_state.obs_comparativo = obs_comp_tmp
-                            st.success("Salvo com sucesso.")
+                            st.session_state["_sync_form_ia"] = True
+                            st.rerun()
 
                     with aba_3d:
                         fig_3d = go.Figure()
@@ -1599,8 +1628,10 @@ Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura, comp
 """
                                     texto_ia_form = gerar_texto_ia(prompt_form)
                                     st.session_state.obs_comparativo = texto_ia_form
+                                    st.session_state["_sync_form_ia"] = True
+                                    st.session_state.status_ia_form = ("ok", "Análise de formatura gerada pela IA com sucesso.")
                                     st.rerun()
-                                except Exception:
+                                except Exception as e:
                                     dist_med = df_merge['Distancia_m'].mean() if 'Distancia_m' in df_merge.columns else 0
                                     dist_max = df_merge['Distancia_m'].max() if 'Distancia_m' in df_merge.columns else 0
                                     st.session_state.obs_comparativo = (
@@ -1613,16 +1644,26 @@ Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura, comp
                                         f"* **Torque Médio (Líder vs Ala):** **{_sf('E1 Torq ft lbs_lider', 'mean', '{:.0f}')} lb.ft** vs **{_sf('E1 Torq ft lbs_ala', 'mean', '{:.0f}')} lb.ft**.\n"
                                         f"* **T5/ITT Média (Líder vs Ala):** **{_sf('E1 ITT_lider', 'mean', '{:.0f}')} ºC** vs **{_sf('E1 ITT_ala', 'mean', '{:.0f}')} ºC**."
                                     )
+                                    st.session_state["_sync_form_ia"] = True
+                                    st.session_state.status_ia_form = ("warn", f"API de IA indisponível ({e}). Foi gerado o resumo automático local.")
                                     st.rerun()
+
+                        if st.session_state.status_ia_form:
+                            _tp, _tx = st.session_state.status_ia_form
+                            if _tp == "ok":
+                                st.success(_tx)
+                            else:
+                                st.warning(_tx)
 
                         obs_form_edit = st.text_area(
                             "Análise de Formatura (Editável para o Dossiê):",
-                            value=st.session_state.obs_comparativo,
                             key="k_form_rel_ia",
                             height=280
                         )
+                        st.session_state.obs_comparativo = obs_form_edit
                         if st.button("CONFIRMAR TEXTO DO DOSSIÊ", key="b_form_rel_conf"):
                             st.session_state.obs_comparativo = obs_form_edit
+                            st.session_state["_sync_form_ia"] = True
                             st.success("Texto salvo para exportação.")
 
                         obs_formatura_atual = {
@@ -1731,10 +1772,11 @@ Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura, comp
 
                     st.divider()
                     st.markdown("**Parecer Técnico - Comportamento Dinâmico**")
-                    obs_graficos_tmp = st.text_area("Escreva aqui:", value=st.session_state.obs_graficos, key='k_comp_graficos')
+                    obs_graficos_tmp = st.text_area("Escreva aqui:", key='k_comp_graficos')
                     if st.button("SALVAR COMENTÁRIO", key="b_comp_graf"):
                         st.session_state.obs_graficos = obs_graficos_tmp
-                        st.success("Salvo.")
+                        st.session_state["_sync_trend_ia"] = True
+                        st.rerun()
 
                 with aba_rel_comp:
                     st.markdown("#### Estudo Detalhado de Performance e Degradação de Motor (Trend Monitoring)")
@@ -1768,7 +1810,6 @@ Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura, comp
                             pct = f" ({sinal}{(d / vA) * 100:.2f}%)" if vA != 0 else ""
                             return f"- {label}: Voo A = {fmt.format(vA)}{unit} | Voo B = {fmt.format(vB)}{unit} | Delta (B-A) = {sinal}{fmt.format(d)}{unit}{pct}"
 
-                        # Análise em Banda de Iso-Torque (mesma carga mecânica nos dois voos)
                         bloco_isotorque = "- Dados de Torque insuficientes para comparação em banda de Iso-Torque."
                         if 'E1 Torq ft lbs' in dfA_v.columns and 'E1 Torq ft lbs' in dfB_v.columns:
                             tq_a_s = dfA_v['E1 Torq ft lbs'].dropna()
@@ -1895,18 +1936,29 @@ Sua missão é redigir um ESTUDO TÉCNICO EXAUSTIVO comparando o Voo A (Baseline
 """
                                 texto_ia_trend = gerar_texto_ia(prompt_trend)
                                 st.session_state.obs_graficos = texto_ia_trend
+                                st.session_state["_sync_trend_ia"] = True
+                                st.session_state.status_ia_trend = ("ok", "Estudo de degradação gerado pela IA com sucesso.")
                                 st.rerun()
                             except Exception as e:
-                                st.error(f"Não foi possível gerar o estudo de degradação com IA: {e}")
+                                st.session_state.status_ia_trend = ("warn", f"Não foi possível gerar o estudo via IA ({e}).")
+                                st.rerun()
+
+                    if st.session_state.status_ia_trend:
+                        _tp, _tx = st.session_state.status_ia_trend
+                        if _tp == "ok":
+                            st.success(_tx)
+                        else:
+                            st.warning(_tx)
 
                     obs_trend_edit = st.text_area(
                         "Estudo de Performance e Degradação (Editável para o Relatório Word):",
-                        value=st.session_state.obs_graficos,
                         key="k_trend_rel_ia",
                         height=300
                     )
+                    st.session_state.obs_graficos = obs_trend_edit
                     if st.button("CONFIRMAR ESTUDO PARA EXPORTAÇÃO", key="b_trend_conf"):
                         st.session_state.obs_graficos = obs_trend_edit
+                        st.session_state["_sync_trend_ia"] = True
                         st.success("Estudo salvo para exportação.")
 
                     obs_comp_atual = {
@@ -2216,10 +2268,11 @@ Sua missão é redigir um ESTUDO TÉCNICO EXAUSTIVO comparando o Voo A (Baseline
 
                 st.divider()
                 st.markdown("**Observações Manuais de Inspetoria**")
-                obs_graf_tmp_manual = st.text_area("Escreva o seu parecer manual aqui:", value=st.session_state.obs_graficos, key='k_graf_manual')
+                obs_graf_tmp_manual = st.text_area("Escreva o seu parecer manual aqui:", key='k_graf_manual')
                 if st.button("SALVAR COMENTÁRIO MANUAL", key="b_graf_manual"):
                     st.session_state.obs_graficos = obs_graf_tmp_manual
-                    st.success("Salvo com sucesso.")
+                    st.session_state["_sync_solo_ia"] = True
+                    st.rerun()
 
             with aba_manobras:
                 c_m1, c_m2 = st.columns(2)
@@ -2388,16 +2441,33 @@ Sua tarefa é elaborar uma ANÁLISE TÉCNICA INTEGRAL E MINUCIOSA do voo realiza
 
                             texto_ia_solo = gerar_texto_ia(prompt)
                             st.session_state.obs_graficos = texto_ia_solo
+                            st.session_state["_sync_solo_ia"] = True
+                            st.session_state.status_ia_solo = ("ok", "Análise técnica gerada pela IA com sucesso.")
                             st.rerun()
-                        except Exception:
+                        except Exception as e:
                             st.session_state.obs_graficos = gerar_parecer_contingencia(
                                 max_g, min_g, pico_tq, pico_itt, pico_ng, pico_nh, alertas
                             )
+                            st.session_state["_sync_solo_ia"] = True
+                            st.session_state.status_ia_solo = ("warn", f"API de IA indisponível ({e}). Foi gerado o resumo automático local.")
                             st.rerun()
 
-                obs_graf_tmp_rel = st.text_area("Análise Técnica do Voo (Editável para o Documento Oficial):", value=st.session_state.obs_graficos, key='k_graf_rel', height=280)
+                if st.session_state.status_ia_solo:
+                    _tp, _tx = st.session_state.status_ia_solo
+                    if _tp == "ok":
+                        st.success(_tx)
+                    else:
+                        st.warning(_tx)
+
+                obs_graf_tmp_rel = st.text_area(
+                    "Análise Técnica do Voo (Editável para o Documento Oficial):",
+                    key="k_graf_rel",
+                    height=280
+                )
+                st.session_state.obs_graficos = obs_graf_tmp_rel
                 if st.button("CONFIRMAR ALTERAÇÕES NO PARECER", key="b_graf_rel"):
                     st.session_state.obs_graficos = obs_graf_tmp_rel
+                    st.session_state["_sync_solo_ia"] = True
                     st.success("Parecer atualizado e pronto para exportação.")
 
                 obs_solo_atual = {
