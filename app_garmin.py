@@ -1090,6 +1090,17 @@ def calcular_minutos_voo(df):
             t0 = voo['Datetime'].iloc[0]
             return (df['Datetime'] - t0).dt.total_seconds() / 60.0
     return (df['Datetime'] - df['Datetime'].iloc[0]).dt.total_seconds() / 60.0
+    
+def filtrar_janela_voo(df):
+    if df.empty or 'Datetime' not in df.columns:
+        return df
+    gaps = df['Datetime'].diff().dt.total_seconds().abs().fillna(0) > 7200
+    bloco_id = gaps.cumsum()
+    if 'IAS' in df.columns and (df['IAS'] > 40).any():
+        bloco_voo = bloco_id[df['IAS'] > 40].value_counts().idxmax()
+    else:
+        bloco_voo = bloco_id.value_counts().idxmax()
+    return df[bloco_id == bloco_voo].copy()
 
 
 # ==========================================
@@ -1287,7 +1298,8 @@ def _preencher_celula_formatada(cell, texto, alinhamento, cor_texto, tamanho_pt=
     v_align.set(qn('w:val'), 'center')
     tcPr.append(v_align)
 
-    partes = re.split(r'(\*\*.*?\*\*)', str(texto))
+    texto_limpo = re.sub(r'<br\s*/?>', '\n', str(texto), flags=re.IGNORECASE)
+    partes = re.split(r'(\*\*.*?\*\*)', texto_limpo)
     for parte in partes:
         if not parte:
             continue
@@ -1622,7 +1634,7 @@ def _inserir_tabela_markdown_word(doc, linhas_brutas):
             )
 
     texto_tab = " ".join(" ".join(r) for r in linhas_norm).upper()
-    tem_motor = ("P95" in texto_tab) or ("STD" in texto_tab)
+    tem_motor = ("STD" in texto_tab) or ("OSCILAÇÃO" in texto_tab) or ("OSCILACAO" in texto_tab)
     tem_p90 = ("P90" in texto_tab) or ("MEDIANA" in texto_tab)
 
     if tem_motor or tem_p90:
@@ -2343,6 +2355,12 @@ Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura ({pro
                 dfA['Minutos'] = calcular_minutos_voo(dfA)
                 dfB['Minutos'] = calcular_minutos_voo(dfB)
 
+                dfA = filtrar_janela_voo(processar_dados(arquivos_up[idx_A].getvalue()))
+                dfB = filtrar_janela_voo(processar_dados(arquivos_up[idx_B].getvalue()))
+
+                dfA['Minutos'] = calcular_minutos_voo(dfA)
+                dfB['Minutos'] = calcular_minutos_voo(dfB)
+
                 aba_resumo_comp, aba_graf_comp, aba_rel_comp = st.tabs([
                     "1. MATRIZ DE VARIAÇÃO (DELTAS)",
                     "2. CURVAS SOBREPOSTAS",
@@ -2553,6 +2571,8 @@ Redija um ESTUDO TÉCNICO EXAUSTIVO comparando o Voo A (Baseline / Referência) 
 - NÃO use linhas '---'. Nunca use separador de milhar nos números.
 - OBRIGATÓRIO apresentar as seções 1, 2, 3 e 4 em TABELAS MARKDOWN padronizadas exatamente como abaixo, seguidas de 2 a 4 tópicos (`*`) interpretativos.
 - OBRIGATÓRIO citar todas as excedências pré-auditadas acima (nunca diga "dentro dos limites" se houver excedências).
+- RIGOR FÍSICO OBRIGATÓRIO: altitude MENOR significa ar MAIS DENSO (maior densidade do ar), permitindo entregar o mesmo torque com menor T5/ITT e menor Ng; altitude MAIOR significa ar mais rarefeito (menor densidade). Nunca inverta essa relação.
+- NÃO use tags HTML como <br> dentro das células da tabela (use ";" para separar itens).
 
 # ESTUDO DETALHADO DE PERFORMANCE E DEGRADAÇÃO DE MOTOR (TREND MONITORING)
 ## 1. EQUIVALÊNCIA DE MISSÃO E PERFIL DE VOO
@@ -2950,7 +2970,7 @@ Redija um ESTUDO TÉCNICO EXAUSTIVO comparando o Voo A (Baseline / Referência) 
                 with c_m1:
                     st.markdown("#### Diagnóstico de Aproximação e Toque (Landing)")
                     if 'IAS' in df.columns and 'AltMSL' in df.columns and not voo_ativo.empty:
-                        fase_final = voo_ativo.tail(300)
+                        fase_final = voo_ativo.tail(60)
                         pico_g_pouso = fase_final['NormAc'].max()
                         vel_aprox = fase_final['IAS'].mean()
                         st.info(f"**Velocidade Média na Final:** `{vel_aprox:.1f} kt` (Limite Flape Pouso T-27M: `148 kt`)")
@@ -3036,7 +3056,7 @@ Redija um ESTUDO TÉCNICO EXAUSTIVO comparando o Voo A (Baseline / Referência) 
                     if 'Pitch' in df_voo.columns and 'Roll' in df_voo.columns:
                         amostras_acro = int(((df_voo['Pitch'].abs() > 45) | (df_voo['Roll'].abs() > 60)).sum())
 
-                    fase_final = df_voo.tail(300) if not df_voo.empty else df
+                    fase_final = df_voo.tail(60) if not df_voo.empty else df
                     ias_final = _safe(fase_final, 'IAS', 'mean', '{:.1f}')
                     g_pouso = _safe(fase_final, 'NormAc', 'max', '{:.2f}')
 
@@ -3074,14 +3094,13 @@ Elabore uma ANÁLISE TÉCNICA DETALHADA do voo abaixo, analisando EXCLUSIVAMENTE
 - Registros em Atitude Elevada (|Pitch| > 45º ou |Roll| > 60º): {amostras_acro} amostras
 - Força G (NormAc): Mínima {min_g:.2f}G | Média {_safe(df_voo, 'NormAc', 'mean', '{:.2f}')}G | Máxima +{max_g:.2f}G (Limites: {l_g_min}G a +{l_g_max}G)
 - Exposição a Cargas G: {seg_g3} amostras >= +3.0G | {seg_g4} amostras >= +4.0G | Maior sequência em voo invertido (<-0.15G): {seg_inv_max}s
-- Aproximação Final e Pouso (últimas 300 amostras em voo): IAS média {ias_final} kt | Pico de Força G no toque {g_pouso}G
+- Aproximação Final e Pouso (últimas 60 amostras em voo): IAS média {ias_final} kt | Pico de Força G no toque {g_pouso}G
 
 === 3. PARÂMETROS DO MOTOR 1 ===
 - Torque (lb.ft): Média {_safe(df_voo, 'E1 Torq ft lbs', 'mean', '{:.0f}')} | P95 {_safe(df_voo, 'E1 Torq ft lbs', 'p95', '{:.0f}')} | Máximo {_safe(df, 'E1 Torq ft lbs', 'max', '{:.0f}')} | Std {_safe(df_voo, 'E1 Torq ft lbs', 'std', '{:.0f}')} (Red Line: {l_tq_red} lb.ft)
 - Temperatura T5 / ITT (ºC): Média {_safe(df_voo, 'E1 ITT', 'mean', '{:.0f}')} | P95 {_safe(df_voo, 'E1 ITT', 'p95', '{:.0f}')} | Máximo {_safe(df, 'E1 ITT', 'max', '{:.0f}')} | Std {_safe(df_voo, 'E1 ITT', 'std', '{:.1f}')} (Amarelo: {l_itt_yel} ºC | Red Line: {l_itt_red} ºC)
 - Gerador de Gás Ng (%): Média {_safe(df_voo, 'E1 NG', 'mean', '{:.1f}')} | P95 {_safe(df_voo, 'E1 NG', 'p95', '{:.1f}')} | Máximo {_safe(df, 'E1 NG', 'max', '{:.1f}')} | Std {_safe(df_voo, 'E1 NG', 'std', '{:.2f}')} (Amarelo: {l_ng_yel}% | Red Line: {l_ng_red}%)
-- Rotação da Hélice Nh (%): Mínima {_safe(df_voo, 'E1 NP %', 'min', '{:.1f}')} | Média {_safe(df_voo, 'E1 NP %', 'mean', '{:.1f}')} | Máximo {_safe(df, 'E1 NP %', 'max', '{:.1f}')} (Red Line: {l_nh_red}%)
-- Acoplamento no Torque Máximo: T5/ITT = {itt_no_tq_max} | Ng = {ng_no_tq_max} | Altitude = {alt_no_tq_max}
+- Rotação da Hélice Nh (%): Média {_safe(df_voo, 'E1 NP %', 'mean', '{:.1f}')} | P95 {_safe(df_voo, 'E1 NP %', 'p95', '{:.1f}')} | Máximo {_safe(df, 'E1 NP %', 'max', '{:.1f}')} | Std {_safe(df_voo, 'E1 NP %', 'std', '{:.2f}')} (Red Line: {l_nh_red}%)- Acoplamento no Torque Máximo: T5/ITT = {itt_no_tq_max} | Ng = {ng_no_tq_max} | Altitude = {alt_no_tq_max}
 
 === 4. SISTEMA DE LUBRIFICAÇÃO (MOTOR EM REGIME Ng > 50%) ===
 - Temperatura do Óleo (OilT): Média {_safe(df_mot, 'E1 OilT_Celsius', 'mean', '{:.0f}')} ºC | Máxima {_safe(df_mot, 'E1 OilT_Celsius', 'max', '{:.0f}')} ºC (Red Line: {l_oilt_red} ºC)
@@ -3118,7 +3137,7 @@ Elabore uma ANÁLISE TÉCNICA DETALHADA do voo abaixo, analisando EXCLUSIVAMENTE
 | Torque (lb.ft) | ... | ... | ... | ... | {l_tq_red} |
 | Temperatura T5 / ITT (ºC) | ... | ... | ... | ... | {l_itt_red} |
 | Gerador de Gás Ng (%) | ... | ... | ... | ... | {l_ng_red} |
-| Rotação da Hélice Nh (%) | ... | - | ... | - | {l_nh_red} |
+| Rotação da Hélice Nh (%) | ... | ... | ... | ... | {l_nh_red} |
 
 ## 4. SISTEMA DE LUBRIFICAÇÃO (OILT E OILP EM REGIME)
 | Parâmetro | Mínimo | Média | Máximo | Faixa / Limite |
