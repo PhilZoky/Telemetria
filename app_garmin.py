@@ -813,7 +813,14 @@ arquivos_up = st.sidebar.file_uploader(
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"<div style='font-size: 11px; font-weight: 700; color: {T['txt_sec']}; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px;'>CONFIGURAÇÃO DA AERONAVE</div>", unsafe_allow_html=True)
 
-projeto_atual = st.sidebar.selectbox("Perfil de Envelope:", list(perfis_salvos.keys()))
+lista_perfis = list(perfis_salvos.keys())
+prox_perfil = st.session_state.pop("_proximo_perfil", None)
+if prox_perfil and prox_perfil in lista_perfis:
+    st.session_state["perfil_ativo_sel"] = prox_perfil
+elif "perfil_ativo_sel" in st.session_state and st.session_state["perfil_ativo_sel"] not in lista_perfis:
+    st.session_state["perfil_ativo_sel"] = lista_perfis[0]
+
+projeto_atual = st.sidebar.selectbox("Perfil de Envelope:", lista_perfis, key="perfil_ativo_sel")
 p_dados = perfis_salvos[projeto_atual]
 
 tipo_projeto = p_dados.get("tipo_aeronave", "Asa Fixa")
@@ -855,11 +862,15 @@ if escolha_tema != st.session_state.tema_ui:
 st.sidebar.markdown("---")
 
 with st.sidebar.expander("Cadastrar Nova Aeronave", expanded=False):
-    novo_projeto = st.text_input("Designação da Aeronave:")
-    nova_classe = st.selectbox("Categoria:", ["Asa Fixa", "Asa Rotativa"])
-    qtd_mot_novo = st.number_input("Nº de Motores:", min_value=1, max_value=6, value=1)
+    novo_projeto = st.text_input("Designação da Aeronave:", key="cad_anv_nome").strip()
+    nova_classe = st.selectbox("Categoria:", ["Asa Fixa", "Asa Rotativa"], key="cad_anv_classe")
+    qtd_mot_novo = st.number_input("Nº de Motores:", min_value=1, max_value=6, value=1, key="cad_anv_mot")
     if st.button("Salvar Novo Perfil", use_container_width=True):
-        if novo_projeto and novo_projeto not in perfis_salvos:
+        if not novo_projeto:
+            st.warning("Informe a designação da aeronave.")
+        elif novo_projeto in perfis_salvos:
+            st.warning("Já existe um perfil com esse nome.")
+        else:
             perfis_salvos[novo_projeto] = {
                 "tipo_aeronave": nova_classe,
                 "qtd_motores": int(qtd_mot_novo),
@@ -871,19 +882,43 @@ with st.sidebar.expander("Cadastrar Nova Aeronave", expanded=False):
                 "oilt_red": 99.0, "oilt_min_green": 10.0,
                 "oilp_red": 95.0, "oilp_min_green": 40.0
             }
-            salvou_nuvem = salvar_perfis(perfis_salvos)
-            st.success(f"Aeronave '{novo_projeto}' cadastrada{' na nuvem' if salvou_nuvem else ''}.")
+            salvar_perfis(perfis_salvos)
+            st.session_state["_proximo_perfil"] = novo_projeto
             st.rerun()
 
-with st.sidebar.expander("Limites de Envelope (Arcos)", expanded=False):
-    st.caption("Parametrização dos limites estruturais e de motor.")
+with st.sidebar.expander("Editar / Excluir Perfil Ativo", expanded=False):
+    st.caption("Renomeie, ajuste limites ou exclua o perfil selecionado acima.")
+    e_perfil_oficial = (projeto_atual == "T-27M (Oficial)")
 
-    novo_tipo_aeronave = st.selectbox("Categoria Atual:", ["Asa Fixa", "Asa Rotativa"], index=0 if tipo_projeto == "Asa Fixa" else 1)
-    nova_qtd_mot = st.number_input("Quantidade de Motores Atual:", min_value=1, max_value=6, value=qtd_motores_config)
+    nome_editado = st.text_input(
+        "Nome do Perfil:",
+        value=projeto_atual,
+        disabled=e_perfil_oficial,
+        key=f"edit_nome_{projeto_atual}"
+    ).strip()
+
+    novo_tipo_aeronave = st.selectbox(
+        "Categoria Atual:",
+        ["Asa Fixa", "Asa Rotativa"],
+        index=0 if tipo_projeto == "Asa Fixa" else 1,
+        key=f"edit_cat_{projeto_atual}"
+    )
+    nova_qtd_mot = st.number_input(
+        "Quantidade de Motores Atual:",
+        min_value=1,
+        max_value=6,
+        value=qtd_motores_config,
+        key=f"edit_mot_{projeto_atual}"
+    )
     st.markdown("---")
 
     def ler_limite(label, chave):
-        val = st.text_input(label, value=str(p_dados.get(chave, "")))
+        val_ini = p_dados.get(chave, "")
+        val = st.text_input(
+            label,
+            value="" if val_ini is None else str(val_ini),
+            key=f"lim_{projeto_atual}_{chave}"
+        )
         try:
             return float(val) if val.strip() != "" else None
         except:
@@ -904,29 +939,57 @@ with st.sidebar.expander("Limites de Envelope (Arcos)", expanded=False):
     l_oilp_red = ler_limite("Pressão Óleo Red Line", "oilp_red")
     l_oilp_min = ler_limite("Pressão Óleo Mínima (Luz Press Óleo)", "oilp_min_green")
 
-    if st.button("Atualizar Envelope", use_container_width=True):
-        perfis_salvos[projeto_atual].update({
-            "tipo_aeronave": novo_tipo_aeronave,
-            "qtd_motores": int(nova_qtd_mot),
-            "g_max": l_g_max,
-            "g_min": l_g_min,
-            "tq_red": l_tq_red,
-            "tq_yel": l_tq_yel,
-            "itt_red": l_itt_red,
-            "itt_yel": l_itt_yel,
-            "ng_red": l_ng_red,
-            "ng_yel": l_ng_yel,
-            "nh_red": l_nh_red,
-            "nh_yel": l_nh_yel,
-            "oilt_red": l_oilt_red,
-            "oilt_min_green": l_oilt_min,
-            "oilp_red": l_oilp_red,
-            "oilp_min_green": l_oilp_min
-        })
-        perfis_salvos[projeto_atual] = {k: (v if v is not None else "") for k, v in perfis_salvos[projeto_atual].items()}
-        salvou_nuvem = salvar_perfis(perfis_salvos)
-        st.success(f"Envelope do {projeto_atual} atualizado{' na nuvem' if salvou_nuvem else ''}.")
-        st.rerun()
+    if st.button("Salvar Alterações do Perfil", use_container_width=True, key="btn_salvar_perfil"):
+        nome_destino = projeto_atual if e_perfil_oficial else nome_editado
+        if not nome_destino:
+            st.warning("O nome do perfil não pode ficar vazio.")
+        elif nome_destino != projeto_atual and nome_destino in perfis_salvos:
+            st.warning(f"Já existe um perfil chamado '{nome_destino}'.")
+        else:
+            dados_novos = {
+                "tipo_aeronave": novo_tipo_aeronave,
+                "qtd_motores": int(nova_qtd_mot),
+                "g_max": l_g_max,
+                "g_min": l_g_min,
+                "tq_red": l_tq_red,
+                "tq_yel": l_tq_yel,
+                "itt_red": l_itt_red,
+                "itt_yel": l_itt_yel,
+                "ng_red": l_ng_red,
+                "ng_yel": l_ng_yel,
+                "nh_red": l_nh_red,
+                "nh_yel": l_nh_yel,
+                "oilt_red": l_oilt_red,
+                "oilt_min_green": l_oilt_min,
+                "oilp_red": l_oilp_red,
+                "oilp_min_green": l_oilp_min
+            }
+            dados_novos = {k: (v if v is not None else "") for k, v in dados_novos.items()}
+            if nome_destino != projeto_atual:
+                del perfis_salvos[projeto_atual]
+            perfis_salvos[nome_destino] = dados_novos
+            salvar_perfis(perfis_salvos)
+            st.session_state["_proximo_perfil"] = nome_destino
+            st.rerun()
+
+    st.markdown("---")
+    if e_perfil_oficial:
+        st.caption("O perfil padrão T-27M (Oficial) é protegido e não pode ser excluído.")
+    else:
+        conf_del = st.checkbox(
+            f"Confirmar exclusão de '{projeto_atual}'",
+            key=f"conf_del_{projeto_atual}"
+        )
+        if st.button(
+            "Excluir Perfil Selecionado",
+            use_container_width=True,
+            disabled=not conf_del,
+            key="btn_excluir_perfil"
+        ):
+            del perfis_salvos[projeto_atual]
+            salvar_perfis(perfis_salvos)
+            st.session_state["_proximo_perfil"] = "T-27M (Oficial)"
+            st.rerun()
 
 
 # ==========================================
@@ -1196,13 +1259,136 @@ def adicionar_paragrafo_com_markdown(doc_or_cell, texto, estilo=None, bullet=Fal
             p.add_run(parte)
     return p
 
+def _estilizar_bordas_tabela(table, cor_borda="CBD5E1"):
+    tblPr = table._tbl.tblPr
+    borders = parse_xml(
+        f'<w:tblBorders {nsdecls("w")}>'
+        f'<w:top w:val="single" w:sz="6" w:space="0" w:color="1B365D"/>'
+        f'<w:bottom w:val="single" w:sz="6" w:space="0" w:color="1B365D"/>'
+        f'<w:left w:val="none"/>'
+        f'<w:right w:val="none"/>'
+        f'<w:insideH w:val="single" w:sz="4" w:space="0" w:color="{cor_borda}"/>'
+        f'<w:insideV w:val="single" w:sz="4" w:space="0" w:color="{cor_borda}"/>'
+        f'</w:tblBorders>'
+    )
+    tblPr.append(borders)
+
+def _preencher_celula_formatada(cell, texto, alinhamento, cor_texto, tamanho_pt=9.0, forcar_negrito=False):
+    p = cell.paragraphs[0]
+    p.alignment = alinhamento
+    p.paragraph_format.space_before = Pt(2)
+    p.paragraph_format.space_after = Pt(2)
+    p.paragraph_format.line_spacing = 1.08
+
+    # Centraliza verticalmente o conteúdo na célula
+    tcPr = cell._tc.get_or_add_tcPr()
+    v_align = OxmlElement('w:vAlign')
+    v_align.set(qn('w:val'), 'center')
+    tcPr.append(v_align)
+
+    partes = re.split(r'(\*\*.*?\*\*)', str(texto))
+    for parte in partes:
+        if not parte:
+            continue
+        if parte.startswith('**') and parte.endswith('**'):
+            run = p.add_run(parte[2:-2])
+            run.bold = True
+        else:
+            run = p.add_run(parte)
+            if forcar_negrito:
+                run.bold = True
+        run.font.size = Pt(tamanho_pt)
+        run.font.color.rgb = cor_texto
+
+def _inserir_tabela_markdown_word(doc, linhas_brutas):
+    linhas_limpas = []
+    for ln in linhas_brutas:
+        # Ignora a linha separadora do Markdown (|---|---|---|)
+        if re.match(r'^[\|\s\-:]+$', ln):
+            continue
+        celulas = [c.strip() for c in ln.strip('|').split('|')]
+        if any(celulas):
+            linhas_limpas.append(celulas)
+
+    if not linhas_limpas:
+        return
+
+    n_cols = max(len(r) for r in linhas_limpas)
+    linhas_norm = [r + [""] * (n_cols - len(r)) for r in linhas_limpas]
+
+    table = doc.add_table(rows=len(linhas_norm), cols=n_cols)
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.autofit = False
+    _estilizar_bordas_tabela(table)
+
+    # Calcula largura proporcional somando 17.0 cm (largura útil da folha A4)
+    pesos = []
+    for c_idx in range(n_cols):
+        tam_med = max(len(re.sub(r'\*\*', '', r[c_idx])) for r in linhas_norm)
+        pesos.append(max(tam_med, 8))
+    soma_pesos = sum(pesos)
+    larguras_cm = [max(2.2, (p / soma_pesos) * 17.0) for p in pesos]
+    fator = 17.0 / sum(larguras_cm)
+    larguras_cm = [w * fator for w in larguras_cm]
+
+    COR_BRANCO = RGBColor(255, 255, 255)
+    COR_TEXTO_TAB = RGBColor(30, 41, 59)
+
+    for r_idx, linha_dados in enumerate(linhas_norm):
+        row = table.rows[r_idx]
+        trPr = row._tr.get_or_add_trPr()
+        trPr.append(OxmlElement('w:cantSplit'))
+
+        e_cabecalho = (r_idx == 0)
+        if e_cabecalho:
+            trPr.append(OxmlElement('w:tblHeader'))
+
+        bg_hex = "1B365D" if e_cabecalho else ("F0F4F8" if r_idx % 2 == 0 else "FFFFFF")
+
+        for c_idx, valor in enumerate(linha_dados):
+            cell = row.cells[c_idx]
+            cell.width = Cm(larguras_cm[c_idx])
+            set_cell_background(cell, bg_hex)
+            set_cell_margins(cell, top=75, bottom=75, left=100, right=100)
+
+            alinh = WD_ALIGN_PARAGRAPH.LEFT if (c_idx == 0 and not e_cabecalho) else WD_ALIGN_PARAGRAPH.CENTER
+            _preencher_celula_formatada(
+                cell,
+                valor,
+                alinhamento=alinh,
+                cor_texto=COR_BRANCO if e_cabecalho else COR_TEXTO_TAB,
+                tamanho_pt=9.5 if e_cabecalho else 9.0,
+                forcar_negrito=e_cabecalho
+            )
+
+    p_esp = doc.add_paragraph()
+    p_esp.paragraph_format.space_before = Pt(0)
+    p_esp.paragraph_format.space_after = Pt(6)
+
 def renderizar_markdown_no_word(doc, texto, cor_titulo=RGBColor(27, 54, 93)):
-    """Converte títulos (#, ##, ###), bullets (*, -) e negrito (**) para formatação nativa do Word."""
+    """Converte títulos (#, ##, ###), tabelas Markdown (|...|), bullets (*, -) e negrito (**) para formatação nativa do Word."""
     if not str(texto).strip():
         return
-    for linha in str(texto).split('\n'):
-        l_limpa = linha.strip()
+
+    linhas = str(texto).split('\n')
+    i = 0
+    while i < len(linhas):
+        l_limpa = linhas[i].strip()
         if not l_limpa:
+            i += 1
+            continue
+
+        # Detecta bloco de tabela Markdown (linhas começando com |)
+        if l_limpa.startswith("|") and l_limpa.count("|") >= 2:
+            bloco_tab = []
+            while i < len(linhas):
+                ln_tab = linhas[i].strip()
+                if ln_tab.startswith("|") and ln_tab.count("|") >= 2:
+                    bloco_tab.append(ln_tab)
+                    i += 1
+                else:
+                    break
+            _inserir_tabela_markdown_word(doc, bloco_tab)
             continue
 
         if l_limpa.startswith("# "):
@@ -1210,6 +1396,7 @@ def renderizar_markdown_no_word(doc, texto, cor_titulo=RGBColor(27, 54, 93)):
             p = doc.add_paragraph()
             p.paragraph_format.space_before = Pt(10)
             p.paragraph_format.space_after = Pt(4)
+            p.paragraph_format.keep_with_next = True
             r = p.add_run(tit)
             r.bold = True
             r.font.size = Pt(12)
@@ -1220,6 +1407,7 @@ def renderizar_markdown_no_word(doc, texto, cor_titulo=RGBColor(27, 54, 93)):
             p = doc.add_paragraph()
             p.paragraph_format.space_before = Pt(8)
             p.paragraph_format.space_after = Pt(4)
+            p.paragraph_format.keep_with_next = True
             r = p.add_run(subtit)
             r.bold = True
             r.font.size = Pt(10.5)
@@ -1230,6 +1418,7 @@ def renderizar_markdown_no_word(doc, texto, cor_titulo=RGBColor(27, 54, 93)):
             p = doc.add_paragraph()
             p.paragraph_format.space_before = Pt(6)
             p.paragraph_format.space_after = Pt(3)
+            p.paragraph_format.keep_with_next = True
             r = p.add_run(subtit3)
             r.bold = True
             r.font.size = Pt(10)
@@ -1248,6 +1437,8 @@ def renderizar_markdown_no_word(doc, texto, cor_titulo=RGBColor(27, 54, 93)):
 
         else:
             adicionar_paragrafo_com_markdown(doc, l_limpa)
+
+        i += 1
 
 def gerar_docx_solo_editado(tempos_dict, alertas_texto, obs_dict, graficos_dict):
     doc = Document()
