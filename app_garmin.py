@@ -1907,14 +1907,37 @@ Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura ({pro
   * Líder: Média {_sf('E1 NP %_lider', 'mean', '{:.1f}')}% | Máx {_sf('E1 NP %_lider', 'max', '{:.1f}')}%
   * Ala:   Média {_sf('E1 NP %_ala', 'mean', '{:.1f}')}% | Máx {_sf('E1 NP %_ala', 'max', '{:.1f}')}%
 
-=== FORMATO OBRIGATÓRIO ===
+=== FORMATO OBRIGATÓRIO (TABELAS MANDATÓRIAS) ===
 - NÃO mencione kW, HP, kg/s, toneladas, clima ou resolução de panes.
-- Use exatamente `#`, `##`, `*` e **negrito** para sensores, deltas e valores numéricos.
+- NÃO use linhas divisórias (`---`).
+- OBRIGATÓRIO apresentar os dados numéricos das seções 1, 2 e 3 em TABELAS MARKDOWN padronizadas, sempre começando e terminando cada linha com `|` (barra vertical), exatamente como nos modelos abaixo.
+- Logo abaixo de cada tabela, escreva de 2 a 3 tópicos (`*`) curtos e objetivos interpretando os números.
 
 # ANÁLISE TÉCNICA DETALHADA DE VOO EM FORMATURA
 ## 1. GEOMETRIA TÁTICA, SEPARAÇÃO E ESTABILIDADE DE POSIÇÃO
+| Métrica de Formação | Valor Registrado |
+| :--- | :--- |
+| Separação Horizontal (Mín / Média / Mediana / P90 / Máx) | ... |
+| Distribuição de Proximidade (<=50m / 50–150m / >150m) | ... |
+| Diferencial Vertical Absoluto (Médio / Máximo) | ... |
+
 ## 2. DINÂMICA DE VOO E SINCRONISMO DE MANOBRAS (LÍDER VS ALA)
+| Parâmetro | Líder | Ala | Diferença (Líder - Ala) |
+| :--- | :--- | :--- | :--- |
+| Altitude MSL Média / Máxima (ft) | ... | ... | ... |
+| Velocidade IAS Média / Máxima (kt) | ... | ... | ... |
+| Força G Mínima / Máxima (G) | ... | ... | ... |
+| Pitch Mínimo / Máximo (º) | ... | ... | ... |
+| Roll Mínimo / Máximo (º) | ... | ... | ... |
+
 ## 3. PERFORMANCE DOS MOTORES E MODULAÇÃO DE POTÊNCIA (TORQUE, T5/ITT, NG E NH)
+| Parâmetro de Motor | Líder (Média / P95 / Máx / Std) | Ala (Média / P95 / Máx / Std) | Diferença / Destaque |
+| :--- | :--- | :--- | :--- |
+| Torque (lb.ft) | ... | ... | ... |
+| Temperatura T5 / ITT (ºC) | ... | ... | ... |
+| Gerador de Gás Ng (%) | ... | ... | ... |
+| Rotação da Hélice Nh (%) | ... | ... | ... |
+
 ## 4. SÍNTESE COMPARATIVA DE DESEMPENHO DA ESQUADRILHA
 """
                                     texto_ia_form = gerar_texto_ia(prompt_form)
