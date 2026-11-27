@@ -308,7 +308,6 @@ button[role="tab"][aria-selected="true"] p {
 
     if t['modo'] == 'light':
         st.markdown("""<style>
-/* 1. Etiqueta do arquivo .CSV (todas as camadas internas em branco) */
 [data-testid="stFileUploaderFile"],
 [data-testid="stFileUploaderFile"] div,
 [data-testid="stFileUploaderFileData"],
@@ -324,8 +323,6 @@ button[role="tab"][aria-selected="true"] p {
     border-radius: 8px !important;
     padding: 4px 8px !important;
 }
-
-/* 2. Caixa Perfil de Envelope (todas as camadas internas em branco) */
 section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"],
 section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] > div,
 section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] > div > div {
@@ -339,8 +336,6 @@ section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="sele
     fill: #0f172a !important;
     color: #0f172a !important;
 }
-
-/* 3. Caixas de comentários, alertas e parecer técnico em todas as abas (fundo branco + texto escuro) */
 [data-testid="stTextArea"] [data-baseweb="textarea"],
 [data-testid="stTextArea"] [data-baseweb="base-input"],
 [data-testid="stTextArea"] textarea,
@@ -373,9 +368,101 @@ st.markdown("""<style>
 
 
 # ==========================================
+# PERSISTÊNCIA EM NUVEM (GITHUB GIST SECRETO)
+# ==========================================
+def _obter_config_gist():
+    try:
+        if "GITHUB_TOKEN" in st.secrets and "GIST_ID" in st.secrets:
+            token = str(st.secrets["GITHUB_TOKEN"]).strip()
+            gist_id = str(st.secrets["GIST_ID"]).strip()
+            if token and gist_id:
+                return token, gist_id
+    except Exception:
+        pass
+    return None, None
+
+def ler_json_nuvem(nome_arquivo, padrao_fn):
+    if "_cloud_cache" not in st.session_state:
+        st.session_state["_cloud_cache"] = {}
+    if nome_arquivo in st.session_state["_cloud_cache"]:
+        return json.loads(json.dumps(st.session_state["_cloud_cache"][nome_arquivo]))
+
+    token, gist_id = _obter_config_gist()
+    if token and gist_id:
+        try:
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json"
+            }
+            resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=headers, timeout=10)
+            if resp.status_code == 200:
+                files = resp.json().get("files", {})
+                if nome_arquivo in files and files[nome_arquivo].get("content"):
+                    dados = json.loads(files[nome_arquivo]["content"])
+                    if isinstance(dados, dict) and dados:
+                        st.session_state["_cloud_cache"][nome_arquivo] = dados
+                        return json.loads(json.dumps(dados))
+        except Exception:
+            pass
+
+    if os.path.exists(nome_arquivo):
+        try:
+            with open(nome_arquivo, "r", encoding="utf-8") as f:
+                dados_local = json.load(f)
+            if isinstance(dados_local, dict) and dados_local:
+                st.session_state["_cloud_cache"][nome_arquivo] = dados_local
+                return json.loads(json.dumps(dados_local))
+        except Exception:
+            pass
+
+    padrao = padrao_fn()
+    st.session_state["_cloud_cache"][nome_arquivo] = json.loads(json.dumps(padrao))
+    return padrao
+
+def salvar_json_nuvem(nome_arquivo, dados):
+    if "_cloud_cache" not in st.session_state:
+        st.session_state["_cloud_cache"] = {}
+    st.session_state["_cloud_cache"][nome_arquivo] = json.loads(json.dumps(dados))
+
+    try:
+        with open(nome_arquivo, "w", encoding="utf-8") as f:
+            json.dump(dados, f, indent=4, ensure_ascii=False)
+    except Exception:
+        pass
+
+    token, gist_id = _obter_config_gist()
+    if token and gist_id:
+        try:
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json"
+            }
+            payload = {
+                "files": {
+                    nome_arquivo: {
+                        "content": json.dumps(dados, indent=4, ensure_ascii=False)
+                    }
+                }
+            }
+            resp = requests.patch(f"https://api.github.com/gists/{gist_id}", headers=headers, json=payload, timeout=15)
+            return resp.status_code == 200
+        except Exception:
+            return False
+    return False
+
+
+# ==========================================
 # CONFIGURAÇÃO DA INTELIGÊNCIA ARTIFICIAL
 # ==========================================
 PADRAO_API_KEY = ""
+
+SYSTEM_PROMPT_FDM = """Você é um Engenheiro de Ensaios em Voo e Analista de Telemetria Aeronáutica (FDM).
+REGRAS INVIOLÁVEIS:
+1. USE APENAS OS DADOS FORNECIDOS NO PROMPT. Nunca invente horários, durações, clima, pressão atmosférica (hPa), peso/toneladas ou valores de sensores.
+2. UNIDADES PERMITIDAS EXCLUSIVAMENTE: ft, kt, G, º (graus de Pitch/Roll), lb.ft (Torque), ºC (T5/ITT e OilT), % (Ng e Nh), PSI (OilP) e m (metros na formatura).
+3. ESTRITAMENTE PROIBIDO mencionar ou calcular: kW, HP, potência elétrica, desempenho aeroelétrico, kg/s, toneladas, hPa, OAT/temperatura ambiente ou qualquer parâmetro que não esteja nos dados enviados.
+4. NÃO sugira resolução de panes, troca de peças, boroscopia ou ações corretivas de manutenção. Descreva exclusivamente o voo, a aeronave e a performance entregue pelo motor.
+5. Escreva em português técnico correto e fluente, sem repetir seções e sem usar emojis."""
 
 def obter_credencial_ia():
     try:
@@ -401,14 +488,6 @@ def gerar_parecer_contingencia(max_g, min_g, pico_tq, pico_itt, pico_ng, pico_nh
 
 ## 3. EVENTOS E EXCEDÊNCIAS REGISTRADAS
 {bloco_alertas}"""
-
-SYSTEM_PROMPT_FDM = """Você é um Engenheiro de Ensaios em Voo e Analista de Telemetria Aeronáutica (FDM).
-REGRAS INVIOLÁVEIS:
-1. USE APENAS OS DADOS FORNECIDOS NO PROMPT. Nunca invente horários, durações, clima, pressão atmosférica (hPa), peso/toneladas ou valores de sensores.
-2. UNIDADES PERMITIDAS EXCLUSIVAMENTE: ft, kt, G, º (graus de Pitch/Roll), lb.ft (Torque), ºC (T5/ITT e OilT), % (Ng e Nh), PSI (OilP) e m (metros na formatura).
-3. ESTRITAMENTE PROIBIDO mencionar ou calcular: kW, HP, potência elétrica, desempenho aeroelétrico, kg/s, toneladas, hPa, OAT/temperatura ambiente ou qualquer parâmetro que não esteja nos dados enviados.
-4. NÃO sugira resolução de panes, troca de peças, boroscopia ou ações corretivas de manutenção. Descreva exclusivamente o voo, a aeronave e a performance entregue pelo motor.
-5. Escreva em português técnico correto e fluente, sem repetir seções e sem usar emojis."""
 
 def gerar_texto_ia(prompt_texto):
     credencial = obter_credencial_ia()
@@ -437,7 +516,6 @@ def gerar_texto_ia(prompt_texto):
                     m["id"] for m in r_mod.json().get("data", [])
                     if not any(x in m["id"].lower() for x in bloqueados)
                 ]
-                # Prioriza sempre modelos grandes (70B/120B/32B) e joga 8B/9B para o fim
                 ordenados = [m for m in modelos_preferidos if m in ativos]
                 restantes_grandes = [
                     m for m in ativos
@@ -500,15 +578,6 @@ def gerar_texto_ia(prompt_texto):
 # ==========================================
 ARQUIVO_USUARIOS = "banco_usuarios.json"
 
-def carregar_usuarios():
-    if os.path.exists(ARQUIVO_USUARIOS):
-        try:
-            with open(ARQUIVO_USUARIOS, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            return criar_admin_padrao()
-    return criar_admin_padrao()
-
 def criar_admin_padrao():
     return {
         "Filipe_Iack": {
@@ -519,9 +588,16 @@ def criar_admin_padrao():
         }
     }
 
+def carregar_usuarios():
+    dados = ler_json_nuvem(ARQUIVO_USUARIOS, criar_admin_padrao)
+    if not isinstance(dados, dict) or not dados:
+        dados = criar_admin_padrao()
+    if "Filipe_Iack" not in dados:
+        dados["Filipe_Iack"] = criar_admin_padrao()["Filipe_Iack"]
+    return dados
+
 def salvar_usuarios(usuarios):
-    with open(ARQUIVO_USUARIOS, "w", encoding="utf-8") as f:
-        json.dump(usuarios, f, indent=4)
+    return salvar_json_nuvem(ARQUIVO_USUARIOS, usuarios)
 
 usuarios_permitidos = carregar_usuarios()
 
@@ -610,16 +686,17 @@ if st.session_state.usuario_logado is None:
                         "organizacao": nova_org,
                         "data_cadastro": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     }
-                    salvar_usuarios(usuarios_permitidos)
-                    st.success(f"Credencial de {novo_nome} habilitada. Acesse pela aba de Login.")
+                    salvou_nuvem = salvar_usuarios(usuarios_permitidos)
+                    st.success(f"Credencial de {novo_nome} habilitada{' na nuvem' if salvou_nuvem else ''}. Acesse pela aba de Login.")
 
     st.stop()
 
 
 # ==========================================
-# 1. GERENCIADOR DE PERFIS (PADRÃO OFICIAL T-27M AUTOMÁTICO)
+# 1. GERENCIADOR DE PERFIS (COM PERSISTÊNCIA EM NUVEM)
 # ==========================================
-ARQUIVO_PERFIS = f"perfis_{st.session_state.usuario_logado}.json"
+_user_safe = re.sub(r'[^a-zA-Z0-9_-]', '_', str(st.session_state.usuario_logado))
+ARQUIVO_PERFIS = f"perfis_{_user_safe}.json"
 
 PERFIS_PADRAO = {
     "T-27M (Oficial)": {
@@ -647,19 +724,15 @@ PERFIS_PADRAO = {
 }
 
 def carregar_perfis():
-    if os.path.exists(ARQUIVO_PERFIS):
-        try:
-            with open(ARQUIVO_PERFIS, "r", encoding="utf-8") as f:
-                dados = json.load(f)
-            dados["T-27M (Oficial)"] = PERFIS_PADRAO["T-27M (Oficial)"].copy()
-            return dados
-        except:
-            return PERFIS_PADRAO.copy()
-    return PERFIS_PADRAO.copy()
+    dados = ler_json_nuvem(ARQUIVO_PERFIS, lambda: json.loads(json.dumps(PERFIS_PADRAO)))
+    if not isinstance(dados, dict) or not dados:
+        dados = json.loads(json.dumps(PERFIS_PADRAO))
+    if "T-27M (Oficial)" not in dados:
+        dados["T-27M (Oficial)"] = PERFIS_PADRAO["T-27M (Oficial)"].copy()
+    return dados
 
 def salvar_perfis(perfis):
-    with open(ARQUIVO_PERFIS, "w", encoding="utf-8") as f:
-        json.dump(perfis, f, indent=4)
+    return salvar_json_nuvem(ARQUIVO_PERFIS, perfis)
 
 perfis_salvos = carregar_perfis()
 
@@ -712,11 +785,14 @@ for _wk, _orig in [
 # ==========================================
 # 3. BARRA LATERAL (PAINEL DE COMANDO E INGESTÃO)
 # ==========================================
+_nuvem_ativa = _obter_config_gist()[0] is not None
+_badge_nuvem = "<span style='color: #10b981; font-weight: 700;'>● Operacional (Nuvem)</span>" if _nuvem_ativa else "<span style='color: #10b981; font-weight: 700;'>● Operacional</span>"
+
 st.sidebar.markdown(f"""
 <div style="background: {T['bg_card_grad']}; border: 1px solid {T['border']}; border-left: 4px solid {T['accent']}; border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
     <div style="font-size: 10px; font-weight: 700; color: {T['accent']}; letter-spacing: 1.2px; text-transform: uppercase;">INSPETOR CONECTADO</div>
     <div style="font-size: 15px; font-weight: 700; color: {T['txt_main']}; margin-top: 3px;">{st.session_state.nome_logado}</div>
-    <div style="font-size: 11px; color: {T['txt_sec']}; margin-top: 2px;">Status: <span style="color: #10b981; font-weight: 700;">● Operacional</span></div>
+    <div style="font-size: 11px; color: {T['txt_sec']}; margin-top: 2px;">Status: {_badge_nuvem}</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -795,8 +871,8 @@ with st.sidebar.expander("Cadastrar Nova Aeronave", expanded=False):
                 "oilt_red": 99.0, "oilt_min_green": 10.0,
                 "oilp_red": 95.0, "oilp_min_green": 40.0
             }
-            salvar_perfis(perfis_salvos)
-            st.success(f"Aeronave '{novo_projeto}' cadastrada.")
+            salvou_nuvem = salvar_perfis(perfis_salvos)
+            st.success(f"Aeronave '{novo_projeto}' cadastrada{' na nuvem' if salvou_nuvem else ''}.")
             st.rerun()
 
 with st.sidebar.expander("Limites de Envelope (Arcos)", expanded=False):
@@ -848,8 +924,8 @@ with st.sidebar.expander("Limites de Envelope (Arcos)", expanded=False):
             "oilp_min_green": l_oilp_min
         })
         perfis_salvos[projeto_atual] = {k: (v if v is not None else "") for k, v in perfis_salvos[projeto_atual].items()}
-        salvar_perfis(perfis_salvos)
-        st.success(f"Envelope do {projeto_atual} atualizado.")
+        salvou_nuvem = salvar_perfis(perfis_salvos)
+        st.success(f"Envelope do {projeto_atual} atualizado{' na nuvem' if salvou_nuvem else ''}.")
         st.rerun()
 
 
@@ -1417,7 +1493,6 @@ def gerar_docx_comparativo_editado(arq_a, arq_b, df_metricas, obs_dict, graficos
     doc.save(io_bytes)
     return io_bytes.getvalue()
 
-
 # ==========================================
 # 7. FLUXO PRINCIPAL
 # ==========================================
@@ -1480,10 +1555,13 @@ if arquivos_up:
                 if df_merge.empty:
                     st.error("Os relógios não coincidem. Ajuste o 'Offset Fuso Horário Ala' acima para -3 ou +3.")
                 else:
-                    df_merge['Distancia_m'] = formula_haversine(
-                        df_merge['Latitude_lider'], df_merge['Longitude_lider'],
-                        df_merge['Latitude_ala'], df_merge['Longitude_ala']
-                    )
+                    if all(c in df_merge.columns for c in ['Latitude_lider', 'Longitude_lider', 'Latitude_ala', 'Longitude_ala']):
+                        df_merge['Distancia_m'] = formula_haversine(
+                            df_merge['Latitude_lider'], df_merge['Longitude_lider'],
+                            df_merge['Latitude_ala'], df_merge['Longitude_ala']
+                        )
+                    else:
+                        df_merge['Distancia_m'] = np.nan
 
                     aba_dist, aba_comp, aba_3d, aba_rel_form = st.tabs([
                         "1. SEPARAÇÃO TÁTICA",
@@ -1510,9 +1588,9 @@ if arquivos_up:
                         df_top_dist = df_merge.sort_values(by='Distancia_m', ascending=False).head(15).copy()
                         df_formatada = pd.DataFrame()
                         df_formatada['Hora (Líder)'] = df_top_dist['Datetime'].dt.strftime('%H:%M:%S')
-                        df_formatada['Distância (m)'] = df_top_dist['Distancia_m'].apply(lambda x: f"{x:.1f} m")
-                        if 'AltMSL_lider' in df_top_dist.columns: df_formatada['Alt. Líder (ft)'] = df_top_dist['AltMSL_lider'].apply(lambda x: f"{x:.0f}")
-                        if 'Pitch_lider' in df_top_dist.columns: df_formatada['Arfagem Líder (º)'] = df_top_dist['Pitch_lider'].apply(lambda x: f"{x:.1f}")
+                        df_formatada['Distância (m)'] = df_top_dist['Distancia_m'].apply(lambda x: f"{x:.1f} m" if pd.notnull(x) else "-")
+                        if 'AltMSL_lider' in df_top_dist.columns: df_formatada['Alt. Líder (ft)'] = df_top_dist['AltMSL_lider'].apply(lambda x: f"{x:.0f}" if pd.notnull(x) else "-")
+                        if 'Pitch_lider' in df_top_dist.columns: df_formatada['Arfagem Líder (º)'] = df_top_dist['Pitch_lider'].apply(lambda x: f"{x:.1f}" if pd.notnull(x) else "-")
                         render_html_table(df_formatada)
 
                         st.divider()
@@ -1523,7 +1601,7 @@ if arquivos_up:
                             st.success("Apontamento gravado.")
 
                     with aba_comp:
-                        fig_comp = make_subplots(rows=6, cols=1, shared_xaxes=True, vertical_spacing=0.03, subplot_titles=("1. Altitude MSL (ft)", "2. Fator de Carga (Força G)", "3. Torque (Lbs)", "4. Temperatura T5 / ITT (ºC)", "5. Rotação Ng (%)", "6. Rotação Hélice Nh (%)"))
+                        fig_comp = make_subplots(rows=6, cols=1, shared_xaxes=True, vertical_spacing=0.03, subplot_titles=("1. Altitude MSL (ft)", "2. Fator de Carga (Força G)", "3. Torque (lb.ft)", "4. Temperatura T5 / ITT (ºC)", "5. Rotação Ng (%)", "6. Rotação Hélice Nh (%)"))
                         if 'AltMSL_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['AltMSL_lider'], name="Alt Líder", line=dict(color='#ea580c', width=2)), row=1, col=1)
                         if 'AltMSL_ala' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['AltMSL_ala'], name="Alt Ala", line=dict(color='#2563eb', width=2, dash='dot')), row=1, col=1)
                         if 'NormAc_lider' in df_merge.columns: fig_comp.add_trace(go.Scattergl(x=df_merge['Datetime'], y=df_merge['NormAc_lider'], name="G Líder", line=dict(color='#ea580c', width=2)), row=2, col=1)
@@ -1549,8 +1627,10 @@ if arquivos_up:
 
                     with aba_3d:
                         fig_3d = go.Figure()
-                        fig_3d.add_trace(go.Scatter3d(x=df_merge['Longitude_lider'], y=df_merge['Latitude_lider'], z=df_merge['AltMSL_lider'], mode='lines', line=dict(color='#ea580c', width=4), name="Líder"))
-                        fig_3d.add_trace(go.Scatter3d(x=df_merge['Longitude_ala'], y=df_merge['Latitude_ala'], z=df_merge['AltMSL_ala'], mode='lines', line=dict(color='#2563eb', width=4), name="Ala"))
+                        if 'Longitude_lider' in df_merge.columns and 'Latitude_lider' in df_merge.columns:
+                            fig_3d.add_trace(go.Scatter3d(x=df_merge['Longitude_lider'], y=df_merge['Latitude_lider'], z=df_merge['AltMSL_lider'], mode='lines', line=dict(color='#ea580c', width=4), name="Líder"))
+                        if 'Longitude_ala' in df_merge.columns and 'Latitude_ala' in df_merge.columns:
+                            fig_3d.add_trace(go.Scatter3d(x=df_merge['Longitude_ala'], y=df_merge['Latitude_ala'], z=df_merge['AltMSL_ala'], mode='lines', line=dict(color='#2563eb', width=4), name="Ala"))
                         fig_3d.update_layout(template=T['plotly_template'], paper_bgcolor=T['plotly_bg'], height=700, margin=dict(l=0, r=0, b=0, t=20), scene=dict(aspectmode='auto'))
                         st.plotly_chart(fig_3d, use_container_width=True)
                         st.divider()
@@ -1605,36 +1685,30 @@ if arquivos_up:
                             with st.spinner("Processando geometria tática, dinâmica comparada e carga de motores..."):
                                 try:
                                     prompt_form = f"""
-Atue como um Engenheiro de Ensaios em Voo e Instrutor Avaliador de Voo em Formatura (FDM), especialista em {projeto_atual}.
-Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura, comparando minuciosamente o posicionamento geométrico, o comportamento aerodinâmico das células e a carga de trabalho/performance dos motores do LÍDER e do ALA.
-
-=== RESTRIÇÃO ABSOLUTA DE ESCOPO ===
-- NÃO faça diagnóstico ou resolução de panes, NÃO sugira ações de manutenção corretiva, inspeções ou troca de peças.
-- Foque 100% na caracterização técnica do voo em formatura, estabilidade de posição, sincronismo aerodinâmico e demanda comparativa sobre os motores (especialmente modulação de potência/manete do Ala em relação ao Líder).
-- Utilize EXCLUSIVAMENTE os dados abaixo. Nunca invente valores, horários ou eventos.
+Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura ({projeto_atual}), comparando exclusivamente os sensores monitorados pelo painel entre o LÍDER e o ALA.
 
 === 1. IDENTIFICAÇÃO E GEOMETRIA TÁTICA ===
 - Aeronave Líder (Nº 1): {arq_lider}
 - Aeronave Ala (Nº 2): {arq_ala}
 - Tempo Total Sincronizado: {dur_sync}
-- Separação Horizontal (Haversine): Mínima {_sf('Distancia_m', 'min', '{:.1f}')} m | Média {_sf('Distancia_m', 'mean', '{:.1f}')} m | Mediana (P50) {_sf('Distancia_m', 'median', '{:.1f}')} m | P90 {_sf('Distancia_m', 'p90', '{:.1f}')} m | Máxima {_sf('Distancia_m', 'max', '{:.1f}')} m
+- Separação Horizontal (m): Mínima {_sf('Distancia_m', 'min', '{:.1f}')} m | Média {_sf('Distancia_m', 'mean', '{:.1f}')} m | Mediana (P50) {_sf('Distancia_m', 'median', '{:.1f}')} m | P90 {_sf('Distancia_m', 'p90', '{:.1f}')} m | Máxima {_sf('Distancia_m', 'max', '{:.1f}')} m
 - Distribuição de Proximidade: {pct_cerrada:.1f}% do tempo <= 50 m | {pct_media:.1f}% entre 50 m e 150 m | {pct_afastada:.1f}% > 150 m
 - Diferencial Vertical Absoluto (|Alt Ala - Alt Líder|): Médio {diff_alt_med} | Máximo {diff_alt_max}
 
 === 2. DINÂMICA DE VOO E MANOBRAS (LÍDER VS ALA) ===
-- Altitude MSL: Líder Média {_sf('AltMSL_lider', 'mean', '{:.0f}')} ft / Máx {_sf('AltMSL_lider', 'max', '{:.0f}')} ft | Ala Média {_sf('AltMSL_ala', 'mean', '{:.0f}')} ft / Máx {_sf('AltMSL_ala', 'max', '{:.0f}')} ft
-- Velocidade (IAS): Líder Média {_sf('IAS_lider', 'mean', '{:.1f}')} kt / Máx {_sf('IAS_lider', 'max', '{:.1f}')} kt | Ala Média {_sf('IAS_ala', 'mean', '{:.1f}')} kt / Máx {_sf('IAS_ala', 'max', '{:.1f}')} kt
+- Altitude MSL (ft): Líder Média {_sf('AltMSL_lider', 'mean', '{:.0f}')} ft / Máx {_sf('AltMSL_lider', 'max', '{:.0f}')} ft | Ala Média {_sf('AltMSL_ala', 'mean', '{:.0f}')} ft / Máx {_sf('AltMSL_ala', 'max', '{:.0f}')} ft
+- Velocidade IAS (kt): Líder Média {_sf('IAS_lider', 'mean', '{:.1f}')} kt / Máx {_sf('IAS_lider', 'max', '{:.1f}')} kt | Ala Média {_sf('IAS_ala', 'mean', '{:.1f}')} kt / Máx {_sf('IAS_ala', 'max', '{:.1f}')} kt
 - Força G (NormAc): Líder [{_sf('NormAc_lider', 'min', '{:.2f}')}G a +{_sf('NormAc_lider', 'max', '{:.2f}')}G] | Ala [{_sf('NormAc_ala', 'min', '{:.2f}')}G a +{_sf('NormAc_ala', 'max', '{:.2f}')}G]
-- Pitch: Líder [{_sf('Pitch_lider', 'min', '{:.1f}')}º a {_sf('Pitch_lider', 'max', '{:.1f}')}º] | Ala [{_sf('Pitch_ala', 'min', '{:.1f}')}º a {_sf('Pitch_ala', 'max', '{:.1f}')}º]
-- Roll: Líder [{_sf('Roll_lider', 'min', '{:.1f}')}º a {_sf('Roll_lider', 'max', '{:.1f}')}º] | Ala [{_sf('Roll_ala', 'min', '{:.1f}')}º a {_sf('Roll_ala', 'max', '{:.1f}')}º]
+- Pitch (º): Líder [{_sf('Pitch_lider', 'min', '{:.1f}')}º a {_sf('Pitch_lider', 'max', '{:.1f}')}º] | Ala [{_sf('Pitch_ala', 'min', '{:.1f}')}º a {_sf('Pitch_ala', 'max', '{:.1f}')}º]
+- Roll (º): Líder [{_sf('Roll_lider', 'min', '{:.1f}')}º a {_sf('Roll_lider', 'max', '{:.1f}')}º] | Ala [{_sf('Roll_ala', 'min', '{:.1f}')}º a {_sf('Roll_ala', 'max', '{:.1f}')}º]
 
 === 3. PERFORMANCE E CARGA DE TRABALHO DOS MOTORES (LÍDER VS ALA) ===
 - Torque (lb.ft):
-  * Líder: Média {_sf('E1 Torq ft lbs_lider', 'mean', '{:.0f}')} | P95 {_sf('E1 Torq ft lbs_lider', 'p95', '{:.0f}')} | Máx {_sf('E1 Torq ft lbs_lider', 'max', '{:.0f}')} | Oscilação (Desvio-Padrão): {_sf('E1 Torq ft lbs_lider', 'std', '{:.0f}')}
-  * Ala:   Média {_sf('E1 Torq ft lbs_ala', 'mean', '{:.0f}')} | P95 {_sf('E1 Torq ft lbs_ala', 'p95', '{:.0f}')} | Máx {_sf('E1 Torq ft lbs_ala', 'max', '{:.0f}')} | Oscilação (Desvio-Padrão): {_sf('E1 Torq ft lbs_ala', 'std', '{:.0f}')}
+  * Líder: Média {_sf('E1 Torq ft lbs_lider', 'mean', '{:.0f}')} lb.ft | P95 {_sf('E1 Torq ft lbs_lider', 'p95', '{:.0f}')} lb.ft | Máx {_sf('E1 Torq ft lbs_lider', 'max', '{:.0f}')} lb.ft | Oscilação (Std): {_sf('E1 Torq ft lbs_lider', 'std', '{:.0f}')} lb.ft
+  * Ala:   Média {_sf('E1 Torq ft lbs_ala', 'mean', '{:.0f}')} lb.ft | P95 {_sf('E1 Torq ft lbs_ala', 'p95', '{:.0f}')} lb.ft | Máx {_sf('E1 Torq ft lbs_ala', 'max', '{:.0f}')} lb.ft | Oscilação (Std): {_sf('E1 Torq ft lbs_ala', 'std', '{:.0f}')} lb.ft
 - Temperatura T5 / ITT (ºC):
-  * Líder: Média {_sf('E1 ITT_lider', 'mean', '{:.0f}')} | P95 {_sf('E1 ITT_lider', 'p95', '{:.0f}')} | Máx {_sf('E1 ITT_lider', 'max', '{:.0f}')} | Oscilação (Std): {_sf('E1 ITT_lider', 'std', '{:.1f}')}
-  * Ala:   Média {_sf('E1 ITT_ala', 'mean', '{:.0f}')} | P95 {_sf('E1 ITT_ala', 'p95', '{:.0f}')} | Máx {_sf('E1 ITT_ala', 'max', '{:.0f}')} | Oscilação (Std): {_sf('E1 ITT_ala', 'std', '{:.1f}')}
+  * Líder: Média {_sf('E1 ITT_lider', 'mean', '{:.0f}')} ºC | P95 {_sf('E1 ITT_lider', 'p95', '{:.0f}')} ºC | Máx {_sf('E1 ITT_lider', 'max', '{:.0f}')} ºC | Oscilação (Std): {_sf('E1 ITT_lider', 'std', '{:.1f}')} ºC
+  * Ala:   Média {_sf('E1 ITT_ala', 'mean', '{:.0f}')} ºC | P95 {_sf('E1 ITT_ala', 'p95', '{:.0f}')} ºC | Máx {_sf('E1 ITT_ala', 'max', '{:.0f}')} ºC | Oscilação (Std): {_sf('E1 ITT_ala', 'std', '{:.1f}')} ºC
 - Gerador de Gás Ng (%):
   * Líder: Média {_sf('E1 NG_lider', 'mean', '{:.1f}')}% | P95 {_sf('E1 NG_lider', 'p95', '{:.1f}')}% | Máx {_sf('E1 NG_lider', 'max', '{:.1f}')}% | Oscilação (Std): {_sf('E1 NG_lider', 'std', '{:.2f}')}%
   * Ala:   Média {_sf('E1 NG_ala', 'mean', '{:.1f}')}% | P95 {_sf('E1 NG_ala', 'p95', '{:.1f}')}% | Máx {_sf('E1 NG_ala', 'max', '{:.1f}')}% | Oscilação (Std): {_sf('E1 NG_ala', 'std', '{:.2f}')}%
@@ -1643,13 +1717,13 @@ Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura, comp
   * Ala:   Média {_sf('E1 NP %_ala', 'mean', '{:.1f}')}% | Máx {_sf('E1 NP %_ala', 'max', '{:.1f}')}%
 
 === FORMATO OBRIGATÓRIO ===
-- Tom estritamente técnico, profundo e objetivo, sem emojis.
-- Use `#`, `##`, `*` e **negrito** para destacar sensores, deltas e valores numéricos.
+- NÃO mencione kW, HP, kg/s, toneladas, clima ou resolução de panes.
+- Use exatamente `#`, `##`, `*` e **negrito** para sensores, deltas e valores numéricos.
 
 # ANÁLISE TÉCNICA DETALHADA DE VOO EM FORMATURA
 ## 1. GEOMETRIA TÁTICA, SEPARAÇÃO E ESTABILIDADE DE POSIÇÃO
 ## 2. DINÂMICA DE VOO E SINCRONISMO DE MANOBRAS (LÍDER VS ALA)
-## 3. PERFORMANCE DOS MOTORES E CARGA DE TRABALHO DE POTÊNCIA (MODULAÇÃO DE MANETE)
+## 3. PERFORMANCE DOS MOTORES E MODULAÇÃO DE POTÊNCIA (TORQUE, T5/ITT, NG E NH)
 ## 4. SÍNTESE COMPARATIVA DE DESEMPENHO DA ESQUADRILHA
 """
                                     texto_ia_form = gerar_texto_ia(prompt_form)
@@ -1760,7 +1834,7 @@ Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura, comp
                 add_metric("Força G Máxima (G)", "NormAc", False, True)
                 add_metric("Força G Mínima (G)", "NormAc", True, True)
                 for i in range(1, qtd_motores_config + 1):
-                    add_metric(f"Torque Máx Motor {i} (Lbs)", f"E{i} Torq ft lbs")
+                    add_metric(f"Torque Máx Motor {i} (lb.ft)", f"E{i} Torq ft lbs")
                     add_metric(f"Temp T5/ITT Máx Motor {i} (ºC)", f"E{i} ITT")
                     add_metric(f"Ng Máx Motor {i} (%)", f"E{i} NG")
                     add_metric(f"Nh Máx Motor {i} (%)", f"E{i} NP %")
@@ -1780,7 +1854,7 @@ Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura, comp
                         st.success("Salvo.")
 
                 with aba_graf_comp:
-                    fig_trend = make_subplots(rows=4, cols=1, shared_xaxes=True, vertical_spacing=0.04, subplot_titles=("1. Perfil de Altitude MSL (ft)", "2. Torque do Motor 1 (Lbs)", "3. Temperatura T5 / ITT Motor 1 (ºC)", "4. Rotação Ng Motor 1 (%)"))
+                    fig_trend = make_subplots(rows=4, cols=1, shared_xaxes=True, vertical_spacing=0.04, subplot_titles=("1. Perfil de Altitude MSL (ft)", "2. Torque do Motor 1 (lb.ft)", "3. Temperatura T5 / ITT Motor 1 (ºC)", "4. Rotação Ng Motor 1 (%)"))
 
                     corA = '#ea580c'
                     corB = '#0284c7'
@@ -1870,7 +1944,6 @@ Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura, comp
 {_cmp('Torque Médio dentro da Banda', 'E1 Torq ft lbs', 'mean', '{:.0f}', ' lb.ft', isoA, isoB)}
 {_cmp('T5 / ITT Média para o Mesmo Torque', 'E1 ITT', 'mean', '{:.1f}', ' ºC', isoA, isoB)}
 {_cmp('Ng Média para o Mesmo Torque', 'E1 NG', 'mean', '{:.2f}', '%', isoA, isoB)}
-{_cmp('Fluxo de Combustível Médio para o Mesmo Torque', 'E1 FFlow', 'mean', '{:.1f}', '', isoA, isoB)}
 {_cmp('Altitude Média durante a Banda de Iso-Torque', 'AltMSL', 'mean', '{:.0f}', ' ft', isoA, isoB)}
 {_cmp('Velocidade Média (IAS) durante a Banda', 'IAS', 'mean', '{:.1f}', ' kt', isoA, isoB)}
 {linha_raz_itt}
@@ -1892,13 +1965,7 @@ Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura, comp
                         with st.spinner("Executando análise termodinâmica e de tendência de degradação (Voo A vs Voo B)..."):
                             try:
                                 prompt_trend = f"""
-Atue como um Engenheiro Sênior de Propulsão Aeronáutica e Especialista em Engine Trend Monitoring (ETM) de motores turboélice (Pratt & Whitney PT6A / {projeto_atual}).
-Sua missão é redigir um ESTUDO TÉCNICO EXAUSTIVO comparando o Voo A (Baseline / Referência) com o Voo B (Voo Recente / Avaliado) da MESMA aeronave, quantificando qualquer desvio de performance, perda de eficiência termodinâmica, deriva térmica da Seção Quente (Hot Section) ou alteração de demanda do gerador de gás (Ng).
-
-=== RESTRIÇÃO ABSOLUTA DE ESCOPO ===
-- NÃO forneça resolução de panes, NÃO sugira ações corretivas, NÃO mande abrir motor, trocar componentes, fazer lavagem de compressor ou realizar inspeções de manutenção.
-- Concentre-se 100% na caracterização profunda da performance do motor e da aeronave entre os dois voos, separando o que é variação de perfil/altitude de voo do que é indício físico real de degradação ou mudança de rendimento do motor.
-- FIDELIDADE TOTAL: baseie-se estritamente nos números fornecidos abaixo. Nunca invente valores.
+Redija um ESTUDO TÉCNICO EXAUSTIVO comparando o Voo A (Baseline / Referência) com o Voo B (Voo Recente / Avaliado) da MESMA aeronave ({projeto_atual}), usando EXCLUSIVAMENTE os sensores monitorados pelo painel para quantificar desvios de performance, deriva térmica da Seção Quente (T5/ITT) e alteração de demanda do gerador de gás (Ng).
 
 === 1. CONTEXTO E EQUIVALÊNCIA DOS PERFIS DE VOO ===
 - Aeronave / Perfil: {projeto_atual}
@@ -1935,12 +2002,10 @@ Sua missão é redigir um ESTUDO TÉCNICO EXAUSTIVO comparando o Voo A (Baseline
 {_cmp('Ng Oscilação (Desvio-Padrão)', 'E1 NG', 'std', '{:.2f}', '%')}
 - Margem de Rotação até Red Line ({lim_ng:.1f}%): Voo A = {margem_ng_A} | Voo B = {margem_ng_B}
 
-- HÉLICE Nh (%) E COMBUSTÍVEL:
+- HÉLICE Nh (%):
 {_cmp('Nh Média', 'E1 NP %', 'mean', '{:.2f}', '%')}
 {_cmp('Nh Máxima', 'E1 NP %', 'max', '{:.1f}', '%', dfA, dfB)}
 {_cmp('Nh Estabilidade (Desvio-Padrão)', 'E1 NP %', 'std', '{:.2f}', '%')}
-{_cmp('Fluxo de Combustível Médio', 'E1 FFlow', 'mean', '{:.1f}', '')}
-{_cmp('Fluxo de Combustível P95', 'E1 FFlow', 'p95', '{:.1f}', '')}
 
 - SISTEMA DE LUBRIFICAÇÃO (MOTOR EM REGIME Ng > 50%):
 {_cmp('Temp. Óleo Média', 'E1 OilT_Celsius', 'mean', '{:.1f}', ' ºC', dfA_m, dfB_m)}
@@ -1950,24 +2015,35 @@ Sua missão é redigir um ESTUDO TÉCNICO EXAUSTIVO comparando o Voo A (Baseline
 {_cmp('Pressão Óleo Máxima em Regime', 'E1 OilP', 'max', '{:.0f}', ' PSI', dfA_m, dfB_m)}
 
 === FORMATO OBRIGATÓRIO ===
-- Escrita altamente técnica, profunda, objetiva e sem emojis.
-- Use `#` para o título principal, `##` para seções, `*` para tópicos e **negrito** para todos os parâmetros, deltas e conclusões quantitativas.
+- NÃO mencione kW, HP, kg/s, fluxo de combustível, toneladas, clima ou resolução de panes/manutenção corretiva.
+- Separe claramente o que decorre de diferença de altitude/perfil de voo do que representa variação real de rendimento do motor.
+- Use exatamente `#`, `##`, `*` e **negrito** para todos os parâmetros, deltas e conclusões quantitativas.
 
 # ESTUDO DETALHADO DE PERFORMANCE E DEGRADAÇÃO DE MOTOR (TREND MONITORING)
 ## 1. EQUIVALÊNCIA DE MISSÃO E IMPACTO DO PERFIL DE VOO (ALTITUDE, VELOCIDADE E CARGAS)
 ## 2. ANÁLISE DE EFICIÊNCIA EM BANDA DE ISO-TORQUE (DESEMPENHO REAL DO MOTOR)
 ## 3. COMPORTAMENTO TÉRMICO (T5/ITT), DERIVA DA SEÇÃO QUENTE E MARGEM TÉRMICA
 ## 4. COMPORTAMENTO DO GERADOR DE GÁS (NG), ENTREGA DE TORQUE E GOVERNANÇA DE HÉLICE (NH)
-## 5. FLUXO DE COMBUSTÍVEL E REGIME TERMOMECÂNICO DO SISTEMA DE LUBRIFICAÇÃO
+## 5. REGIME TERMOMECÂNICO DO SISTEMA DE LUBRIFICAÇÃO (OILT E OILP)
 ## 6. CLASSIFICAÇÃO FINAL DA TENDÊNCIA DE PERFORMANCE (ESTÁVEL / DESVIO LEVE / DEGRADAÇÃO ACENTUADA)
 """
                                 texto_ia_trend = gerar_texto_ia(prompt_trend)
                                 st.session_state.obs_graficos = texto_ia_trend
                                 st.session_state["_sync_trend_ia"] = True
-                                st.session_state.status_ia_trend = ("ok", "Estudo de degradação gerado pela IA com sucesso.")
+                                mod_usado = st.session_state.get("ultimo_modelo_ia", "IA")
+                                st.session_state.status_ia_trend = ("ok", f"Estudo de degradação gerado com sucesso (modelo: {mod_usado}).")
                                 st.rerun()
                             except Exception as e:
-                                st.session_state.status_ia_trend = ("warn", f"Não foi possível gerar o estudo via IA ({e}).")
+                                st.session_state.obs_graficos = (
+                                    f"# ESTUDO DETALHADO DE PERFORMANCE E DEGRADAÇÃO (RESUMO LOCAL)\n"
+                                    f"## 1. COMPARATIVO GERAL\n"
+                                    f"* **Voo A (Baseline):** {arq_A} ({durA})\n"
+                                    f"* **Voo B (Avaliado):** {arq_B} ({durB})\n"
+                                    f"## 2. INDICADORES EM BANDA DE ISO-TORQUE\n"
+                                    f"{bloco_isotorque}"
+                                )
+                                st.session_state["_sync_trend_ia"] = True
+                                st.session_state.status_ia_trend = ("warn", f"API de IA indisponível ({e}). Foi gerado o resumo automático local.")
                                 st.rerun()
 
                     if st.session_state.status_ia_trend:
@@ -2089,8 +2165,8 @@ Sua missão é redigir um ESTUDO TÉCNICO EXAUSTIVO comparando o Voo A (Baseline
                     m_ng = df[f'E{i_mot} NG'].max() if f'E{i_mot} NG' in df.columns else 0
                     m_nh = df[f'E{i_mot} NP %'].max() if f'E{i_mot} NP %' in df.columns else 0
 
-                    if l_tq_red is not None and m_torq >= l_tq_red: add_alerta_contexto(f'E{i_mot} Torq ft lbs', m_torq, f"[CRÍTICO] Motor {i_mot} LINHA VERMELHA Torque: {m_torq:.0f} Lbs")
-                    elif l_tq_yel is not None and m_torq >= l_tq_yel: add_alerta_contexto(f'E{i_mot} Torq ft lbs', m_torq, f"[ALERTA] Motor {i_mot} ARCO AMARELO Torque: {m_torq:.0f} Lbs")
+                    if l_tq_red is not None and m_torq >= l_tq_red: add_alerta_contexto(f'E{i_mot} Torq ft lbs', m_torq, f"[CRÍTICO] Motor {i_mot} LINHA VERMELHA Torque: {m_torq:.0f} lb.ft")
+                    elif l_tq_yel is not None and m_torq >= l_tq_yel: add_alerta_contexto(f'E{i_mot} Torq ft lbs', m_torq, f"[ALERTA] Motor {i_mot} ARCO AMARELO Torque: {m_torq:.0f} lb.ft")
                     if l_ng_red is not None and m_ng >= l_ng_red: add_alerta_contexto(f'E{i_mot} NG', m_ng, f"[CRÍTICO] Motor {i_mot} LINHA VERMELHA Ng: {m_ng:.1f}%")
                     elif l_ng_yel is not None and m_ng >= l_ng_yel: add_alerta_contexto(f'E{i_mot} NG', m_ng, f"[ALERTA] Motor {i_mot} ARCO AMARELO Ng: {m_ng:.1f}%")
                     if l_itt_red is not None and m_itt >= l_itt_red: add_alerta_contexto(f'E{i_mot} ITT', m_itt, f"[CRÍTICO] Motor {i_mot} LINHA VERMELHA ITT: {m_itt:.0f} ºC")
@@ -2280,10 +2356,11 @@ Sua missão é redigir um ESTUDO TÉCNICO EXAUSTIVO comparando o Voo A (Baseline
                 if l_g_max is not None: fig_dash.add_hline(y=l_g_max, line_dash="dash", line_color="#ef4444", row=2, col=1)
 
                 for i_m in range(1, qtd_motores_config + 1):
-                    if f'E{i_m} Torq ft lbs' in df.columns: fig_dash.add_trace(go.Scattergl(x=df['Datetime'], y=df[f'E{i_m} Torq ft lbs'], name=f"Tq M{i_m}", line=dict(color=cores_motores[i_m-1], width=2)), row=3, col=1)
-                    if f'E{i_m} ITT' in df.columns: fig_dash.add_trace(go.Scattergl(x=df['Datetime'], y=df[f'E{i_m} ITT'], name=f"T5 M{i_m}", line=dict(color=cores_itt[i_m-1], width=2)), row=4, col=1)
-                    if f'E{i_m} NG' in df.columns: fig_dash.add_trace(go.Scattergl(x=df['Datetime'], y=df[f'E{i_m} NG'], name=f"Ng M{i_m} (%)", line=dict(color=cores_ng[i_m-1], width=2)), row=5, col=1)
-                    if f'E{i_m} NP %' in df.columns: fig_dash.add_trace(go.Scattergl(x=df['Datetime'], y=df[f'E{i_m} NP %'], name=f"Nh M{i_m} (%)", line=dict(color=cores_nh[i_m-1], width=2)), row=6, col=1)
+                    idx_c = (i_m - 1) % 4
+                    if f'E{i_m} Torq ft lbs' in df.columns: fig_dash.add_trace(go.Scattergl(x=df['Datetime'], y=df[f'E{i_m} Torq ft lbs'], name=f"Tq M{i_m}", line=dict(color=cores_motores[idx_c], width=2)), row=3, col=1)
+                    if f'E{i_m} ITT' in df.columns: fig_dash.add_trace(go.Scattergl(x=df['Datetime'], y=df[f'E{i_m} ITT'], name=f"T5 M{i_m}", line=dict(color=cores_itt[idx_c], width=2)), row=4, col=1)
+                    if f'E{i_m} NG' in df.columns: fig_dash.add_trace(go.Scattergl(x=df['Datetime'], y=df[f'E{i_m} NG'], name=f"Ng M{i_m} (%)", line=dict(color=cores_ng[idx_c], width=2)), row=5, col=1)
+                    if f'E{i_m} NP %' in df.columns: fig_dash.add_trace(go.Scattergl(x=df['Datetime'], y=df[f'E{i_m} NP %'], name=f"Nh M{i_m} (%)", line=dict(color=cores_nh[idx_c], width=2)), row=6, col=1)
 
                 if l_tq_red is not None: fig_dash.add_hline(y=l_tq_red, line_dash="dash", line_color="#ef4444", row=3, col=1)
                 if l_itt_red is not None: fig_dash.add_hline(y=l_itt_red, line_dash="dash", line_color="#ef4444", row=4, col=1)
@@ -2447,7 +2524,7 @@ Elabore uma ANÁLISE TÉCNICA DETALHADA do voo abaixo, analisando EXCLUSIVAMENTE
 {texto_alertas}
 
 === INSTRUÇÕES DE ESTRUTURA (OBRIGATÓRIO) ===
-- NÃO mencione kW, HP, kg/s, toneladas, pressão atmosférica ou clima.
+- NÃO mencione kW, HP, kg/s, toneladas, pressão atmosférica, clima ou resolução de panes/manutenção corretiva.
 - Na seção 5, analise cada excedência listada acima informando horário, altitude e velocidade — destacando explicitamente se ocorreu no solo (Vel: 0 kt) ou em voo.
 - Use exatamente `#`, `##`, `*` e **negrito** para os valores e sensores.
 
