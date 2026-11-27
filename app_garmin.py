@@ -1357,20 +1357,20 @@ def auditar_limites_motor(df_ref, sufixo="", rotulo=""):
         elif lim["nh_yel"] is not None and nh_mx > lim["nh_yel"]:
             achados.append(f"- [ARCO AMARELO] {pref}Nh (Hélice): pico {nh_mx:.1f}% (Arco Amarelo: >{lim['nh_yel']:.1f}%)")
 
-    oilt_mx = _max_col(f"E1 OilT_Celsius{sufixo}")
-    if oilt_mx is not None and lim["oilt_red"] is not None and oilt_mx > lim["oilt_red"]:
-        achados.append(f"- [LINHA VERMELHA] {pref}Temp. Óleo (OilT): pico {oilt_mx:.0f} ºC (Red Line: {lim['oilt_red']:.0f} ºC)")
-
-    col_ng, col_oilp = f"E1 NG{sufixo}", f"E1 OilP{sufixo}"
-    if col_ng in df_ref.columns and col_oilp in df_ref.columns:
-        df_on = df_ref[df_ref[col_ng] > 50]
-        if not df_on.empty and not df_on[col_oilp].dropna().empty:
+    col_ng, col_oilt, col_oilp = f"E1 NG{sufixo}", f"E1 OilT_Celsius{sufixo}", f"E1 OilP{sufixo}"
+    df_on = df_ref[df_ref[col_ng] > 50] if col_ng in df_ref.columns else df_ref
+    if not df_on.empty:
+        if col_oilt in df_on.columns and not df_on[col_oilt].dropna().empty:
+            oilt_mx = float(df_on[col_oilt].dropna().max())
+            if lim["oilt_red"] is not None and oilt_mx > lim["oilt_red"]:
+                achados.append(f"- [LINHA VERMELHA] {pref}Temp. Óleo (OilT) em regime (Ng>50%): pico {oilt_mx:.0f} ºC (Red Line: {lim['oilt_red']:.0f} ºC)")
+        if col_oilp in df_on.columns and not df_on[col_oilp].dropna().empty:
             op_mn = float(df_on[col_oilp].dropna().min())
             op_mx = float(df_on[col_oilp].dropna().max())
             if lim["oilp_min"] is not None and op_mn < lim["oilp_min"]:
-                achados.append(f"- [LINHA VERMELHA] {pref}Pressão Óleo (OilP): mínima {op_mn:.0f} PSI em regime (Mínimo: {lim['oilp_min']:.0f} PSI)")
+                achados.append(f"- [LINHA VERMELHA] {pref}Pressão Óleo (OilP) em regime (Ng>50%): mínima {op_mn:.0f} PSI (Mínimo: {lim['oilp_min']:.0f} PSI)")
             if lim["oilp_red"] is not None and op_mx > lim["oilp_red"]:
-                achados.append(f"- [LINHA VERMELHA] {pref}Pressão Óleo (OilP): pico {op_mx:.0f} PSI (Red Line: {lim['oilp_red']:.0f} PSI)")
+                achados.append(f"- [LINHA VERMELHA] {pref}Pressão Óleo (OilP) em regime (Ng>50%): pico {op_mx:.0f} PSI (Red Line: {lim['oilp_red']:.0f} PSI)")
 
     return achados
 
@@ -2118,10 +2118,11 @@ if arquivos_up:
                         st.divider()
                         st.markdown("**Análise Técnica Detalhada de Formatura por IA**")
                         if st.button("GERAR ANÁLISE COMPLETA DE FORMATURA COM IA", key="btn_ia_form", use_container_width=True):
-                            def _sf(col, fn="mean", fmt="{:.1f}"):
-                                if col not in df_merge.columns:
+                            def _sf(col, fn="mean", fmt="{:.1f}", df_src=None):
+                                base = df_merge if df_src is None else df_src
+                                if col not in base.columns:
                                     return "N/D"
-                                s = df_merge[col].dropna()
+                                s = base[col].dropna()
                                 if s.empty:
                                     return "N/D"
                                 if fn == "max": val = s.max()
@@ -2133,6 +2134,18 @@ if arquivos_up:
                                 elif fn == "std": val = s.std()
                                 else: val = s.mean()
                                 return fmt.format(val)
+
+                            def _diff_la(col_base, fn="mean", fmt="{:+.1f}"):
+                                c_l, c_a = f"{col_base}_lider", f"{col_base}_ala"
+                                if c_l not in df_merge.columns or c_a not in df_merge.columns:
+                                    return "N/D"
+                                s_l, s_a = df_merge[c_l].dropna(), df_merge[c_a].dropna()
+                                if s_l.empty or s_a.empty:
+                                    return "N/D"
+                                if fn == "max": v_l, v_a = s_l.max(), s_a.max()
+                                elif fn == "min": v_l, v_a = s_l.min(), s_a.min()
+                                else: v_l, v_a = s_l.mean(), s_a.mean()
+                                return fmt.format(v_l - v_a)
 
                             dur_sync = formatar_duracao(df_merge['Datetime'].iloc[-1] - df_merge['Datetime'].iloc[0]) if len(df_merge) > 1 else "N/D"
 
@@ -2150,6 +2163,9 @@ if arquivos_up:
                                 if not diff_alt.empty:
                                     diff_alt_med = f"{diff_alt.mean():.0f} ft"
                                     diff_alt_max = f"{diff_alt.max():.0f} ft"
+
+                            df_on_l = df_merge[df_merge['E1 NG_lider'] > 50] if 'E1 NG_lider' in df_merge.columns else df_merge
+                            df_on_a = df_merge[df_merge['E1 NG_ala'] > 50] if 'E1 NG_ala' in df_merge.columns else df_merge
 
                             with st.spinner("Processando geometria tática, dinâmica comparada e carga de motores..."):
                                 try:
@@ -2170,12 +2186,12 @@ Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura ({pro
 - Distribuição de Proximidade: {pct_cerrada:.1f}% do tempo <= 50 m | {pct_media:.1f}% entre 50 m e 150 m | {pct_afastada:.1f}% > 150 m
 - Diferencial Vertical Absoluto (|Alt Ala - Alt Líder|): Médio {diff_alt_med} | Máximo {diff_alt_max}
 
-=== 2. DINÂMICA DE VOO E MANOBRAS (LÍDER VS ALA) ===
-- Altitude MSL (ft): Líder Média {_sf('AltMSL_lider', 'mean', '{:.0f}')} ft / Máx {_sf('AltMSL_lider', 'max', '{:.0f}')} ft | Ala Média {_sf('AltMSL_ala', 'mean', '{:.0f}')} ft / Máx {_sf('AltMSL_ala', 'max', '{:.0f}')} ft
-- Velocidade IAS (kt): Líder Média {_sf('IAS_lider', 'mean', '{:.1f}')} kt / Máx {_sf('IAS_lider', 'max', '{:.1f}')} kt | Ala Média {_sf('IAS_ala', 'mean', '{:.1f}')} kt / Máx {_sf('IAS_ala', 'max', '{:.1f}')} kt
-- Força G (NormAc): Líder [{_sf('NormAc_lider', 'min', '{:.2f}')}G a +{_sf('NormAc_lider', 'max', '{:.2f}')}G] | Ala [{_sf('NormAc_ala', 'min', '{:.2f}')}G a +{_sf('NormAc_ala', 'max', '{:.2f}')}G]
-- Pitch (º): Líder [{_sf('Pitch_lider', 'min', '{:.1f}')}º a {_sf('Pitch_lider', 'max', '{:.1f}')}º] | Ala [{_sf('Pitch_ala', 'min', '{:.1f}')}º a {_sf('Pitch_ala', 'max', '{:.1f}')}º]
-- Roll (º): Líder [{_sf('Roll_lider', 'min', '{:.1f}')}º a {_sf('Roll_lider', 'max', '{:.1f}')}º] | Ala [{_sf('Roll_ala', 'min', '{:.1f}')}º a {_sf('Roll_ala', 'max', '{:.1f}')}º]
+=== 2. DINÂMICA DE VOO E MANOBRAS (VALORES E DIFERENÇAS JÁ CALCULADOS — COPIE EXATAMENTE) ===
+- Altitude MSL Média / Máx (ft): Líder {_sf('AltMSL_lider', 'mean', '{:.0f}')} / {_sf('AltMSL_lider', 'max', '{:.0f}')} | Ala {_sf('AltMSL_ala', 'mean', '{:.0f}')} / {_sf('AltMSL_ala', 'max', '{:.0f}')} | Diferença (Líder - Ala): {_diff_la('AltMSL', 'mean', '{:+.0f}')} / {_diff_la('AltMSL', 'max', '{:+.0f}')}
+- Velocidade IAS Média / Máx (kt): Líder {_sf('IAS_lider', 'mean', '{:.1f}')} / {_sf('IAS_lider', 'max', '{:.1f}')} | Ala {_sf('IAS_ala', 'mean', '{:.1f}')} / {_sf('IAS_ala', 'max', '{:.1f}')} | Diferença (Líder - Ala): {_diff_la('IAS', 'mean', '{:+.1f}')} / {_diff_la('IAS', 'max', '{:+.1f}')}
+- Força G Mín / Máx (G): Líder {_sf('NormAc_lider', 'min', '{:+.2f}')} / {_sf('NormAc_lider', 'max', '{:+.2f}')} | Ala {_sf('NormAc_ala', 'min', '{:+.2f}')} / {_sf('NormAc_ala', 'max', '{:+.2f}')} | Diferença (Líder - Ala): {_diff_la('NormAc', 'min', '{:+.2f}')} / {_diff_la('NormAc', 'max', '{:+.2f}')}
+- Pitch Mín / Máx (º): Líder {_sf('Pitch_lider', 'min', '{:+.1f}')} / {_sf('Pitch_lider', 'max', '{:+.1f}')} | Ala {_sf('Pitch_ala', 'min', '{:+.1f}')} / {_sf('Pitch_ala', 'max', '{:+.1f}')} | Diferença (Líder - Ala): {_diff_la('Pitch', 'min', '{:+.1f}')} / {_diff_la('Pitch', 'max', '{:+.1f}')}
+- Roll Mín / Máx (º): Líder {_sf('Roll_lider', 'min', '{:+.1f}')} / {_sf('Roll_lider', 'max', '{:+.1f}')} | Ala {_sf('Roll_ala', 'min', '{:+.1f}')} / {_sf('Roll_ala', 'max', '{:+.1f}')} | Diferença (Líder - Ala): {_diff_la('Roll', 'min', '{:+.1f}')} / {_diff_la('Roll', 'max', '{:+.1f}')}
 
 === 3. PERFORMANCE E CARGA DE TRABALHO DOS MOTORES (LÍDER VS ALA) ===
 - Torque (lb.ft):
@@ -2190,13 +2206,17 @@ Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura ({pro
 - Rotação Hélice Nh (%):
   * Líder: Média {_sf('E1 NP %_lider', 'mean', '{:.1f}')} | Máx {_sf('E1 NP %_lider', 'max', '{:.1f}')}
   * Ala:   Média {_sf('E1 NP %_ala', 'mean', '{:.1f}')} | Máx {_sf('E1 NP %_ala', 'max', '{:.1f}')}
+- Temperatura do Óleo - OilT em regime Ng > 50% (ºC):
+  * Líder: Média {_sf('E1 OilT_Celsius_lider', 'mean', '{:.0f}', df_on_l)} | P95 {_sf('E1 OilT_Celsius_lider', 'p95', '{:.0f}', df_on_l)} | Máx {_sf('E1 OilT_Celsius_lider', 'max', '{:.0f}', df_on_l)} | Std {_sf('E1 OilT_Celsius_lider', 'std', '{:.1f}', df_on_l)}
+  * Ala:   Média {_sf('E1 OilT_Celsius_ala', 'mean', '{:.0f}', df_on_a)} | P95 {_sf('E1 OilT_Celsius_ala', 'p95', '{:.0f}', df_on_a)} | Máx {_sf('E1 OilT_Celsius_ala', 'max', '{:.0f}', df_on_a)} | Std {_sf('E1 OilT_Celsius_ala', 'std', '{:.1f}', df_on_a)}
 
 === 4. LIMITES DO PERFIL ({projeto_atual}) E EXCEDÊNCIAS PRÉ-AUDITADAS ===
-- Limites: Força G [{l_g_min}G a +{l_g_max}G] | Torque Red Line: {l_tq_red} lb.ft | T5/ITT Amarelo/Red: {l_itt_yel}/{l_itt_red} ºC | Ng Amarelo/Red: {l_ng_yel}/{l_ng_red}% | Nh Red Line: {l_nh_red}%
+- Limites: Força G [{l_g_min}G a +{l_g_max}G] | Torque Red Line: {l_tq_red} lb.ft | T5/ITT Amarelo/Red: {l_itt_yel}/{l_itt_red} ºC | Ng Amarelo/Red: {l_ng_yel}/{l_ng_red}% | Nh Red Line: {l_nh_red}% | OilT Red Line: {l_oilt_red} ºC
 - Excedências detectadas automaticamente:
 {txt_aud_form}
 
 === FORMATO OBRIGATÓRIO (TABELAS MANDATÓRIAS) ===
+- COPIE EXATAMENTE os títulos das seções (incluindo "VOO EM FORMATURA") e os valores pré-calculados da coluna "Diferença (Líder - Ala)" sem recalcular nem inverter sinais.
 - NÃO use linhas '---'. Nunca use separador de milhar nos números.
 - OBRIGATÓRIO reportar TODAS as excedências pré-auditadas acima na Seção 3 e na Seção 4 (nunca diga "dentro dos limites operacionais" se houver qualquer excedência listada).
 - Logo abaixo de cada tabela, escreva de 2 a 4 tópicos (`*`) objetivos interpretando os números.
@@ -2212,13 +2232,13 @@ Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura ({pro
 ## 2. DINÂMICA DE VOO E SINCRONISMO DE MANOBRAS (LÍDER VS ALA)
 | Parâmetro | Líder | Ala | Diferença (Líder - Ala) |
 | :--- | :--- | :--- | :--- |
-| Altitude MSL Média / Máxima (ft) | ... | ... | ... |
-| Velocidade IAS Média / Máxima (kt) | ... | ... | ... |
-| Força G Mínima / Máxima (G) | ... | ... | ... |
-| Pitch Mínimo / Máximo (º) | ... | ... | ... |
-| Roll Mínimo / Máximo (º) | ... | ... | ... |
+| Altitude MSL Média / Máx (ft) | ... | ... | ... |
+| Velocidade IAS Média / Máx (kt) | ... | ... | ... |
+| Força G Mín / Máx (G) | ... | ... | ... |
+| Pitch Mín / Máx (º) | ... | ... | ... |
+| Roll Mín / Máx (º) | ... | ... | ... |
 
-## 3. PERFORMANCE DOS MOTORES E MODULAÇÃO DE POTÊNCIA (TORQUE, T5/ITT, NG E NH)
+## 3. PERFORMANCE DOS MOTORES E MODULAÇÃO DE POTÊNCIA (TORQUE, T5/ITT, NG, NH E OILT)
 | Parâmetro | Aeronave | Média | P95 | Máximo | Oscilação (Std) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | Torque (lb.ft) | Líder | ... | ... | ... | ... |
@@ -2229,10 +2249,13 @@ Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura ({pro
 | Gerador de Gás Ng (%) | Ala | ... | ... | ... | ... |
 | Rotação da Hélice Nh (%) | Líder | ... | - | ... | - |
 | Rotação da Hélice Nh (%) | Ala | ... | - | ... | - |
+| Temp. Óleo - OilT (ºC) | Líder | ... | ... | ... | ... |
+| Temp. Óleo - OilT (ºC) | Ala | ... | ... | ... | ... |
 
 ## 4. SÍNTESE COMPARATIVA DE DESEMPENHO E CONFORMIDADE DE LIMITES
 """
                                     texto_ia_form = gerar_texto_ia(prompt_form)
+                                    texto_ia_form = re.sub(r'\bFORMURA\b', 'FORMATURA', texto_ia_form, flags=re.IGNORECASE)
                                     st.session_state.obs_comparativo = texto_ia_form
                                     st.session_state["_sync_form_ia"] = True
                                     mod_usado = st.session_state.get("ultimo_modelo_ia", "IA")
