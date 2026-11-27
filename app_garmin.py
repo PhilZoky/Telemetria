@@ -462,7 +462,8 @@ REGRAS INVIOLÁVEIS:
 2. UNIDADES PERMITIDAS EXCLUSIVAMENTE: ft, kt, G, º (graus de Pitch/Roll), lb.ft (Torque), ºC (T5/ITT e OilT), % (Ng e Nh), PSI (OilP) e m (metros na formatura).
 3. ESTRITAMENTE PROIBIDO mencionar ou calcular: kW, HP, potência elétrica, desempenho aeroelétrico, kg/s, toneladas, hPa, OAT/temperatura ambiente ou qualquer parâmetro que não esteja nos dados enviados.
 4. NÃO sugira resolução de panes, troca de peças, boroscopia ou ações corretivas de manutenção. Descreva exclusivamente o voo, a aeronave e a performance entregue pelo motor.
-5. Escreva em português técnico correto e fluente, sem repetir seções e sem usar emojis."""
+5. Escreva em português técnico correto e fluente, sem repetir seções, sem usar linhas '---' e sem usar emojis.
+6. AUDITORIA RIGOROSA DE LIMITES: Compare SEMPRE os valores das tabelas com o bloco de LIMITES E EXCEDÊNCIAS PRÉ-AUDITADAS. É ESTRITAMENTE PROIBIDO afirmar que a aeronave ou o motor operou "dentro dos limites operacionais" se houver qualquer excedência de Arco Amarelo ou Linha Vermelha listada. Cite explicitamente cada excedência encontrada na análise da seção e na conclusão final."""
 
 def obter_credencial_ia():
     try:
@@ -1300,7 +1301,167 @@ def _preencher_celula_formatada(cell, texto, alinhamento, cor_texto, tamanho_pt=
         run.font.size = Pt(tamanho_pt)
         run.font.color.rgb = cor_texto
 
-def _inserir_legenda_metricas(doc, incluir_p90=False, incluir_motor=True):
+def obter_limites_ativos():
+    return {
+        "g_max": l_g_max, "g_min": l_g_min,
+        "tq_red": l_tq_red, "tq_yel": l_tq_yel,
+        "itt_red": l_itt_red, "itt_yel": l_itt_yel,
+        "ng_red": l_ng_red, "ng_yel": l_ng_yel,
+        "nh_red": l_nh_red, "nh_yel": l_nh_yel,
+        "oilt_red": l_oilt_red, "oilt_min": l_oilt_min,
+        "oilp_red": l_oilp_red, "oilp_min": l_oilp_min
+    }
+
+def auditar_limites_motor(df_ref, sufixo="", rotulo=""):
+    lim = obter_limites_ativos()
+    achados = []
+    pref = f"{rotulo} - " if rotulo else ""
+
+    def _max_col(c):
+        return float(df_ref[c].dropna().max()) if (c in df_ref.columns and not df_ref[c].dropna().empty) else None
+
+    def _min_col(c):
+        return float(df_ref[c].dropna().min()) if (c in df_ref.columns and not df_ref[c].dropna().empty) else None
+
+    g_mx, g_mn = _max_col(f"NormAc{sufixo}"), _min_col(f"NormAc{sufixo}")
+    if g_mx is not None and lim["g_max"] is not None and g_mx > lim["g_max"]:
+        achados.append(f"- [LINHA VERMELHA] {pref}Força G Positiva: pico +{g_mx:.2f}G (Limite: +{lim['g_max']:.1f}G)")
+    if g_mn is not None and lim["g_min"] is not None and g_mn < lim["g_min"]:
+        achados.append(f"- [LINHA VERMELHA] {pref}Força G Negativa: mínimo {g_mn:.2f}G (Limite: {lim['g_min']:.1f}G)")
+
+    tq_mx = _max_col(f"E1 Torq ft lbs{sufixo}")
+    if tq_mx is not None:
+        if lim["tq_red"] is not None and tq_mx > lim["tq_red"]:
+            achados.append(f"- [LINHA VERMELHA] {pref}Torque: pico {tq_mx:.0f} lb.ft (Red Line: {lim['tq_red']:.0f} lb.ft)")
+        elif lim["tq_yel"] is not None and tq_mx > lim["tq_yel"]:
+            achados.append(f"- [ARCO AMARELO] {pref}Torque: pico {tq_mx:.0f} lb.ft (Arco Amarelo: >{lim['tq_yel']:.0f} lb.ft)")
+
+    itt_mx = _max_col(f"E1 ITT{sufixo}")
+    if itt_mx is not None:
+        if lim["itt_red"] is not None and itt_mx > lim["itt_red"]:
+            achados.append(f"- [LINHA VERMELHA] {pref}T5/ITT: pico {itt_mx:.0f} ºC (Red Line: {lim['itt_red']:.0f} ºC)")
+        elif lim["itt_yel"] is not None and itt_mx > lim["itt_yel"]:
+            achados.append(f"- [ARCO AMARELO] {pref}T5/ITT: pico {itt_mx:.0f} ºC (Arco Amarelo: >{lim['itt_yel']:.0f} ºC | Red Line: {lim['itt_red']} ºC)")
+
+    ng_mx = _max_col(f"E1 NG{sufixo}")
+    if ng_mx is not None:
+        if lim["ng_red"] is not None and ng_mx > lim["ng_red"]:
+            achados.append(f"- [LINHA VERMELHA] {pref}Ng: pico {ng_mx:.1f}% (Red Line: {lim['ng_red']:.1f}%)")
+        elif lim["ng_yel"] is not None and ng_mx > lim["ng_yel"]:
+            achados.append(f"- [ARCO AMARELO] {pref}Ng: pico {ng_mx:.1f}% (Arco Amarelo: >{lim['ng_yel']:.1f}% | Red Line: {lim['ng_red']}%)")
+
+    nh_mx = _max_col(f"E1 NP %{sufixo}")
+    if nh_mx is not None:
+        if lim["nh_red"] is not None and nh_mx > lim["nh_red"]:
+            achados.append(f"- [LINHA VERMELHA] {pref}Nh (Hélice): pico {nh_mx:.1f}% (Red Line: {lim['nh_red']:.1f}%)")
+        elif lim["nh_yel"] is not None and nh_mx > lim["nh_yel"]:
+            achados.append(f"- [ARCO AMARELO] {pref}Nh (Hélice): pico {nh_mx:.1f}% (Arco Amarelo: >{lim['nh_yel']:.1f}%)")
+
+    oilt_mx = _max_col(f"E1 OilT_Celsius{sufixo}")
+    if oilt_mx is not None and lim["oilt_red"] is not None and oilt_mx > lim["oilt_red"]:
+        achados.append(f"- [LINHA VERMELHA] {pref}Temp. Óleo (OilT): pico {oilt_mx:.0f} ºC (Red Line: {lim['oilt_red']:.0f} ºC)")
+
+    col_ng, col_oilp = f"E1 NG{sufixo}", f"E1 OilP{sufixo}"
+    if col_ng in df_ref.columns and col_oilp in df_ref.columns:
+        df_on = df_ref[df_ref[col_ng] > 50]
+        if not df_on.empty and not df_on[col_oilp].dropna().empty:
+            op_mn = float(df_on[col_oilp].dropna().min())
+            op_mx = float(df_on[col_oilp].dropna().max())
+            if lim["oilp_min"] is not None and op_mn < lim["oilp_min"]:
+                achados.append(f"- [LINHA VERMELHA] {pref}Pressão Óleo (OilP): mínima {op_mn:.0f} PSI em regime (Mínimo: {lim['oilp_min']:.0f} PSI)")
+            if lim["oilp_red"] is not None and op_mx > lim["oilp_red"]:
+                achados.append(f"- [LINHA VERMELHA] {pref}Pressão Óleo (OilP): pico {op_mx:.0f} PSI (Red Line: {lim['oilp_red']:.0f} PSI)")
+
+    return achados
+
+def _extrair_numeros_celula(texto):
+    limpo = re.sub(r'\*\*', '', str(texto)).strip()
+    if not limpo or limpo in ['-', '–', '—', 'N/D', 'N/A']:
+        return []
+    limpo = limpo.replace('\u2212', '-').replace('\u2011', '-').replace('\u2013', '-')
+    limpo = re.sub(r'(\d),(\d)', r'\1.\2', limpo)
+    achados = re.findall(r'[+-]?\d+(?:\.\d+)?', limpo)
+    return [float(x) for x in achados]
+
+def _identificar_tipo_parametro(texto_param):
+    t = re.sub(r'\*\*', '', str(texto_param)).lower()
+    if any(p in t for p in ['índice', 'indice', 'razão', 'razao', 'margem', 'banda', 'pouso', 'toque', 'exposição', 'exposicao', 'invertido', 'amostra']):
+        return None
+    if 'torque' in t or 'lb.ft' in t:
+        return 'torque'
+    if 't5' in t or 'itt' in t or 'inter-turbina' in t:
+        return 'itt'
+    if re.search(r'\bng\b', t) or 'gerador de gás' in t or 'gerador de gas' in t:
+        return 'ng'
+    if re.search(r'\bnh\b', t) or 'hélice' in t or 'helice' in t:
+        return 'nh'
+    if ('oilt' in t) or (('óleo' in t or 'oleo' in t) and 'temp' in t):
+        return 'oilt'
+    if ('oilp' in t) or (('óleo' in t or 'oleo' in t) and 'press' in t):
+        return 'oilp'
+    if 'força g' in t or 'forca g' in t or 'normac' in t or 'fator de carga' in t:
+        return 'g'
+    return None
+
+def _classificar_arco_celula(tipo_param, cabecalho_col, valor_texto, lim):
+    if not tipo_param:
+        return None
+    h = re.sub(r'\*\*', '', str(cabecalho_col)).lower().strip()
+    ignorar_cols = [
+        'parâmetro', 'parametro', 'métrica', 'metrica', 'indicador',
+        'aeronave', 'oscilação', 'oscilacao', 'std', 'desvio',
+        'delta', 'diferença', 'diferenca', 'variação', 'variacao',
+        'limite', 'red line', 'faixa', 'destaque', 'observa'
+    ]
+    if h == 'voo' or any(k in h for k in ignorar_cols):
+        return None
+
+    nums = _extrair_numeros_celula(valor_texto)
+    if not nums:
+        return None
+
+    if tipo_param == 'g':
+        g_max, g_min = lim.get('g_max'), lim.get('g_min')
+        if (g_max is not None and max(nums) > g_max) or (g_min is not None and min(nums) < g_min):
+            return 'red'
+        return 'green'
+
+    val = max(nums)
+    val_min = min(nums)
+
+    if tipo_param == 'torque':
+        red, yel = lim.get('tq_red'), lim.get('tq_yel')
+        if red is not None and val > red: return 'red'
+        if yel is not None and val > yel: return 'yellow'
+        return 'green'
+    if tipo_param == 'itt':
+        red, yel = lim.get('itt_red'), lim.get('itt_yel')
+        if red is not None and val > red: return 'red'
+        if yel is not None and val > yel: return 'yellow'
+        return 'green'
+    if tipo_param == 'ng':
+        red, yel = lim.get('ng_red'), lim.get('ng_yel')
+        if red is not None and val > red: return 'red'
+        if yel is not None and val > yel: return 'yellow'
+        return 'green'
+    if tipo_param == 'nh':
+        red, yel = lim.get('nh_red'), lim.get('nh_yel')
+        if red is not None and val > red: return 'red'
+        if yel is not None and val > yel: return 'yellow'
+        return 'green'
+    if tipo_param == 'oilt':
+        red, mn = lim.get('oilt_red'), lim.get('oilt_min')
+        if red is not None and val > red: return 'red'
+        if mn is not None and val_min < mn: return 'yellow'
+        return 'green'
+    if tipo_param == 'oilp':
+        red, mn = lim.get('oilp_red'), lim.get('oilp_min')
+        if red is not None and val > red: return 'red'
+        if mn is not None and val_min < mn: return 'red'
+        return 'green'
+    return None
+
+def _inserir_legenda_metricas(doc, incluir_p90=False, incluir_motor=True, incluir_cores=False):
     itens = []
     if incluir_motor:
         itens.extend([
@@ -1313,10 +1474,13 @@ def _inserir_legenda_metricas(doc, incluir_p90=False, incluir_motor=True):
         itens.append(
             ("Mediana (P50) e P90", "a Mediana representa a separação típica na metade da missão; o P90 indica a distância abaixo da qual a formatura permaneceu em 90% do tempo.")
         )
+    if incluir_cores:
+        itens.append(
+            ("Cores dos Arcos", "Verde = dentro do envelope normal | Amarelo = faixa de atenção (Arco Amarelo) | Vermelho = excedência de Linha Vermelha.")
+        )
     if not itens:
         return
 
-    # Pequeno separador para o Word não mesclar a caixa de legenda com a tabela acima
     p_sep = doc.add_paragraph()
     p_sep.paragraph_format.space_before = Pt(0)
     p_sep.paragraph_format.space_after = Pt(2)
@@ -1349,7 +1513,7 @@ def _inserir_legenda_metricas(doc, incluir_p90=False, incluir_motor=True):
     p_tit = cell.paragraphs[0]
     p_tit.paragraph_format.space_before = Pt(0)
     p_tit.paragraph_format.space_after = Pt(3)
-    r_tit = p_tit.add_run("LEGENDA DOS INDICADORES ESTATÍSTICOS")
+    r_tit = p_tit.add_run("LEGENDA DOS INDICADORES E CORES DOS ARCOS")
     r_tit.bold = True
     r_tit.font.size = Pt(8.0)
     r_tit.font.color.rgb = RGBColor(27, 54, 93)
@@ -1381,6 +1545,8 @@ def _inserir_tabela_markdown_word(doc, linhas_brutas):
 
     n_cols = max(len(r) for r in linhas_limpas)
     linhas_norm = [r + [""] * (n_cols - len(r)) for r in linhas_limpas]
+    cabecalhos = linhas_norm[0]
+    limites_ativos = obter_limites_ativos()
 
     table = doc.add_table(rows=len(linhas_norm), cols=n_cols)
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
@@ -1398,9 +1564,14 @@ def _inserir_tabela_markdown_word(doc, linhas_brutas):
 
     COR_BRANCO = RGBColor(255, 255, 255)
     COR_TEXTO_TAB = RGBColor(30, 41, 59)
+    COR_VERDE = RGBColor(21, 128, 61)
+    COR_AMARELO = RGBColor(180, 83, 9)
+    COR_VERMELHO = RGBColor(185, 28, 28)
+
     pad_lr = 65 if n_cols >= 5 else 100
     tam_hdr = 9.0 if n_cols >= 5 else 9.5
     tam_body = 8.5 if n_cols >= 5 else 9.0
+    usou_cores_arco = False
 
     for r_idx, linha_dados in enumerate(linhas_norm):
         row = table.rows[r_idx]
@@ -1411,22 +1582,43 @@ def _inserir_tabela_markdown_word(doc, linhas_brutas):
         if e_cabecalho:
             trPr.append(OxmlElement('w:tblHeader'))
 
-        bg_hex = "1B365D" if e_cabecalho else ("F0F4F8" if r_idx % 2 == 0 else "FFFFFF")
+        tipo_param = None if e_cabecalho else _identificar_tipo_parametro(linha_dados[0])
+        bg_padrao = "1B365D" if e_cabecalho else ("F0F4F8" if r_idx % 2 == 0 else "FFFFFF")
 
         for c_idx, valor in enumerate(linha_dados):
             cell = row.cells[c_idx]
             cell.width = Cm(larguras_cm[c_idx])
-            set_cell_background(cell, bg_hex)
             set_cell_margins(cell, top=70, bottom=70, left=pad_lr, right=pad_lr)
 
+            bg_cel = bg_padrao
+            cor_txt = COR_BRANCO if e_cabecalho else COR_TEXTO_TAB
+            negrito_cel = e_cabecalho
+
+            if not e_cabecalho and c_idx > 0 and tipo_param:
+                arco = _classificar_arco_celula(tipo_param, cabecalhos[c_idx], valor, limites_ativos)
+                if arco == 'red':
+                    bg_cel = "FEE2E2"
+                    cor_txt = COR_VERMELHO
+                    negrito_cel = True
+                    usou_cores_arco = True
+                elif arco == 'yellow':
+                    bg_cel = "FEF3C7"
+                    cor_txt = COR_AMARELO
+                    negrito_cel = True
+                    usou_cores_arco = True
+                elif arco == 'green':
+                    cor_txt = COR_VERDE
+                    usou_cores_arco = True
+
+            set_cell_background(cell, bg_cel)
             alinh = WD_ALIGN_PARAGRAPH.LEFT if (c_idx == 0 and not e_cabecalho) else WD_ALIGN_PARAGRAPH.CENTER
             _preencher_celula_formatada(
                 cell,
                 valor,
                 alinhamento=alinh,
-                cor_texto=COR_BRANCO if e_cabecalho else COR_TEXTO_TAB,
+                cor_texto=cor_txt,
                 tamanho_pt=tam_hdr if e_cabecalho else tam_body,
-                forcar_negrito=e_cabecalho
+                forcar_negrito=negrito_cel
             )
 
     texto_tab = " ".join(" ".join(r) for r in linhas_norm).upper()
@@ -1434,7 +1626,12 @@ def _inserir_tabela_markdown_word(doc, linhas_brutas):
     tem_p90 = ("P90" in texto_tab) or ("MEDIANA" in texto_tab)
 
     if tem_motor or tem_p90:
-        _inserir_legenda_metricas(doc, incluir_p90=tem_p90, incluir_motor=tem_motor)
+        _inserir_legenda_metricas(
+            doc,
+            incluir_p90=tem_p90,
+            incluir_motor=tem_motor,
+            incluir_cores=(usou_cores_arco and tem_motor)
+        )
 
     p_esp = doc.add_paragraph()
     p_esp.paragraph_format.space_before = Pt(0)
@@ -1503,11 +1700,8 @@ def renderizar_markdown_no_word(doc, texto, cor_titulo=RGBColor(27, 54, 93)):
             r.font.color.rgb = cor_titulo
 
         elif l_limpa.startswith("---"):
-            p = doc.add_paragraph()
-            p.paragraph_format.space_before = Pt(4)
-            p.paragraph_format.space_after = Pt(4)
-            r = p.add_run("_________________________________________________________________________________")
-            r.font.color.rgb = RGBColor(200, 200, 200)
+            i += 1
+            continue
 
         elif l_limpa.startswith("* ") or l_limpa.startswith("- "):
             conteudo_item = l_limpa[2:].strip()
@@ -1518,10 +1712,9 @@ def renderizar_markdown_no_word(doc, texto, cor_titulo=RGBColor(27, 54, 93)):
 
         i += 1
 
-    # Garante a legenda mesmo no Voo Solo ou Trend Monitoring quando a IA escreve em tópicos
     texto_upper = str(texto).upper()
     if not legenda_motor_ok and ("P95" in texto_upper or "STD" in texto_upper):
-        _inserir_legenda_metricas(doc, incluir_p90=False, incluir_motor=True)
+        _inserir_legenda_metricas(doc, incluir_p90=False, incluir_motor=True, incluir_cores=True)
         p_esp = doc.add_paragraph()
         p_esp.paragraph_format.space_after = Pt(6)
 
@@ -1960,6 +2153,12 @@ if arquivos_up:
 
                             with st.spinner("Processando geometria tática, dinâmica comparada e carga de motores..."):
                                 try:
+                                    aud_form = (
+                                        auditar_limites_motor(df_merge, "_lider", "Líder") +
+                                        auditar_limites_motor(df_merge, "_ala", "Ala")
+                                    )
+                                    txt_aud_form = "\n".join(aud_form) if aud_form else "- Nenhuma excedência de Arco Amarelo ou Linha Vermelha detectada."
+
                                     prompt_form = f"""
 Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura ({projeto_atual}), comparando exclusivamente os sensores monitorados pelo painel entre o LÍDER e o ALA.
 
@@ -1980,23 +2179,27 @@ Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura ({pro
 
 === 3. PERFORMANCE E CARGA DE TRABALHO DOS MOTORES (LÍDER VS ALA) ===
 - Torque (lb.ft):
-  * Líder: Média {_sf('E1 Torq ft lbs_lider', 'mean', '{:.0f}')} lb.ft | P95 {_sf('E1 Torq ft lbs_lider', 'p95', '{:.0f}')} lb.ft | Máx {_sf('E1 Torq ft lbs_lider', 'max', '{:.0f}')} lb.ft | Oscilação (Std): {_sf('E1 Torq ft lbs_lider', 'std', '{:.0f}')} lb.ft
-  * Ala:   Média {_sf('E1 Torq ft lbs_ala', 'mean', '{:.0f}')} lb.ft | P95 {_sf('E1 Torq ft lbs_ala', 'p95', '{:.0f}')} lb.ft | Máx {_sf('E1 Torq ft lbs_ala', 'max', '{:.0f}')} lb.ft | Oscilação (Std): {_sf('E1 Torq ft lbs_ala', 'std', '{:.0f}')} lb.ft
+  * Líder: Média {_sf('E1 Torq ft lbs_lider', 'mean', '{:.0f}')} | P95 {_sf('E1 Torq ft lbs_lider', 'p95', '{:.0f}')} | Máx {_sf('E1 Torq ft lbs_lider', 'max', '{:.0f}')} | Std {_sf('E1 Torq ft lbs_lider', 'std', '{:.0f}')}
+  * Ala:   Média {_sf('E1 Torq ft lbs_ala', 'mean', '{:.0f}')} | P95 {_sf('E1 Torq ft lbs_ala', 'p95', '{:.0f}')} | Máx {_sf('E1 Torq ft lbs_ala', 'max', '{:.0f}')} | Std {_sf('E1 Torq ft lbs_ala', 'std', '{:.0f}')}
 - Temperatura T5 / ITT (ºC):
-  * Líder: Média {_sf('E1 ITT_lider', 'mean', '{:.0f}')} ºC | P95 {_sf('E1 ITT_lider', 'p95', '{:.0f}')} ºC | Máx {_sf('E1 ITT_lider', 'max', '{:.0f}')} ºC | Oscilação (Std): {_sf('E1 ITT_lider', 'std', '{:.1f}')} ºC
-  * Ala:   Média {_sf('E1 ITT_ala', 'mean', '{:.0f}')} ºC | P95 {_sf('E1 ITT_ala', 'p95', '{:.0f}')} ºC | Máx {_sf('E1 ITT_ala', 'max', '{:.0f}')} ºC | Oscilação (Std): {_sf('E1 ITT_ala', 'std', '{:.1f}')} ºC
+  * Líder: Média {_sf('E1 ITT_lider', 'mean', '{:.0f}')} | P95 {_sf('E1 ITT_lider', 'p95', '{:.0f}')} | Máx {_sf('E1 ITT_lider', 'max', '{:.0f}')} | Std {_sf('E1 ITT_lider', 'std', '{:.1f}')}
+  * Ala:   Média {_sf('E1 ITT_ala', 'mean', '{:.0f}')} | P95 {_sf('E1 ITT_ala', 'p95', '{:.0f}')} | Máx {_sf('E1 ITT_ala', 'max', '{:.0f}')} | Std {_sf('E1 ITT_ala', 'std', '{:.1f}')}
 - Gerador de Gás Ng (%):
-  * Líder: Média {_sf('E1 NG_lider', 'mean', '{:.1f}')}% | P95 {_sf('E1 NG_lider', 'p95', '{:.1f}')}% | Máx {_sf('E1 NG_lider', 'max', '{:.1f}')}% | Oscilação (Std): {_sf('E1 NG_lider', 'std', '{:.2f}')}%
-  * Ala:   Média {_sf('E1 NG_ala', 'mean', '{:.1f}')}% | P95 {_sf('E1 NG_ala', 'p95', '{:.1f}')}% | Máx {_sf('E1 NG_ala', 'max', '{:.1f}')}% | Oscilação (Std): {_sf('E1 NG_ala', 'std', '{:.2f}')}%
+  * Líder: Média {_sf('E1 NG_lider', 'mean', '{:.1f}')} | P95 {_sf('E1 NG_lider', 'p95', '{:.1f}')} | Máx {_sf('E1 NG_lider', 'max', '{:.1f}')} | Std {_sf('E1 NG_lider', 'std', '{:.2f}')}
+  * Ala:   Média {_sf('E1 NG_ala', 'mean', '{:.1f}')} | P95 {_sf('E1 NG_ala', 'p95', '{:.1f}')} | Máx {_sf('E1 NG_ala', 'max', '{:.1f}')} | Std {_sf('E1 NG_ala', 'std', '{:.2f}')}
 - Rotação Hélice Nh (%):
-  * Líder: Média {_sf('E1 NP %_lider', 'mean', '{:.1f}')}% | Máx {_sf('E1 NP %_lider', 'max', '{:.1f}')}%
-  * Ala:   Média {_sf('E1 NP %_ala', 'mean', '{:.1f}')}% | Máx {_sf('E1 NP %_ala', 'max', '{:.1f}')}%
+  * Líder: Média {_sf('E1 NP %_lider', 'mean', '{:.1f}')} | Máx {_sf('E1 NP %_lider', 'max', '{:.1f}')}
+  * Ala:   Média {_sf('E1 NP %_ala', 'mean', '{:.1f}')} | Máx {_sf('E1 NP %_ala', 'max', '{:.1f}')}
+
+=== 4. LIMITES DO PERFIL ({projeto_atual}) E EXCEDÊNCIAS PRÉ-AUDITADAS ===
+- Limites: Força G [{l_g_min}G a +{l_g_max}G] | Torque Red Line: {l_tq_red} lb.ft | T5/ITT Amarelo/Red: {l_itt_yel}/{l_itt_red} ºC | Ng Amarelo/Red: {l_ng_yel}/{l_ng_red}% | Nh Red Line: {l_nh_red}%
+- Excedências detectadas automaticamente:
+{txt_aud_form}
 
 === FORMATO OBRIGATÓRIO (TABELAS MANDATÓRIAS) ===
-- NÃO mencione kW, HP, kg/s, toneladas, clima ou resolução de panes.
-- NÃO use linhas divisórias (`---`).
-- OBRIGATÓRIO apresentar os dados numéricos das seções 1, 2 e 3 em TABELAS MARKDOWN padronizadas, sempre começando e terminando cada linha com `|` (barra vertical), exatamente como nos modelos abaixo.
-- Logo abaixo de cada tabela, escreva de 2 a 3 tópicos (`*`) curtos e objetivos interpretando os números.
+- NÃO use linhas '---'. Nunca use separador de milhar nos números.
+- OBRIGATÓRIO reportar TODAS as excedências pré-auditadas acima na Seção 3 e na Seção 4 (nunca diga "dentro dos limites operacionais" se houver qualquer excedência listada).
+- Logo abaixo de cada tabela, escreva de 2 a 4 tópicos (`*`) objetivos interpretando os números.
 
 # ANÁLISE TÉCNICA DETALHADA DE VOO EM FORMATURA
 ## 1. GEOMETRIA TÁTICA, SEPARAÇÃO E ESTABILIDADE DE POSIÇÃO
@@ -2027,7 +2230,7 @@ Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura ({pro
 | Rotação da Hélice Nh (%) | Líder | ... | - | ... | - |
 | Rotação da Hélice Nh (%) | Ala | ... | - | ... | - |
 
-## 4. SÍNTESE COMPARATIVA DE DESEMPENHO DA ESQUADRILHA
+## 4. SÍNTESE COMPARATIVA DE DESEMPENHO E CONFORMIDADE DE LIMITES
 """
                                     texto_ia_form = gerar_texto_ia(prompt_form)
                                     st.session_state.obs_comparativo = texto_ia_form
@@ -2267,11 +2470,16 @@ Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura ({pro
 
                         with st.spinner("Executando análise termodinâmica e de tendência de degradação (Voo A vs Voo B)..."):
                             try:
+                                aud_trend = (
+                                    auditar_limites_motor(dfA, "", "Voo A") +
+                                    auditar_limites_motor(dfB, "", "Voo B")
+                                )
+                                txt_aud_trend = "\n".join(aud_trend) if aud_trend else "- Nenhuma excedência de Arco Amarelo ou Linha Vermelha detectada em Voo A ou Voo B."
+
                                 prompt_trend = f"""
-Redija um ESTUDO TÉCNICO EXAUSTIVO comparando o Voo A (Baseline / Referência) com o Voo B (Voo Recente / Avaliado) da MESMA aeronave ({projeto_atual}), usando EXCLUSIVAMENTE os sensores monitorados pelo painel para quantificar desvios de performance, deriva térmica da Seção Quente (T5/ITT) e alteração de demanda do gerador de gás (Ng).
+Redija um ESTUDO TÉCNICO EXAUSTIVO comparando o Voo A (Baseline / Referência) com o Voo B (Recente / Avaliado) da MESMA aeronave ({projeto_atual}), usando EXCLUSIVAMENTE os sensores monitorados pelo painel.
 
 === 1. CONTEXTO E EQUIVALÊNCIA DOS PERFIS DE VOO ===
-- Aeronave / Perfil: {projeto_atual}
 - Voo A (Referência): {arq_A} | Duração em voo: {durA}
 - Voo B (Avaliado): {arq_B} | Duração em voo: {durB}
 {_cmp('Altitude Média em Voo (AltMSL)', 'AltMSL', 'mean', '{:.0f}', ' ft')}
@@ -2287,48 +2495,81 @@ Redija um ESTUDO TÉCNICO EXAUSTIVO comparando o Voo A (Baseline / Referência) 
 === 3. ESTATÍSTICA COMPLETA DO GRUPO MOTOPROPULSOR (EM VOO) ===
 - TORQUE (lb.ft):
 {_cmp('Torque Médio', 'E1 Torq ft lbs', 'mean', '{:.0f}', ' lb.ft')}
-{_cmp('Torque P95 (Alta Carga Sustentada)', 'E1 Torq ft lbs', 'p95', '{:.0f}', ' lb.ft')}
-{_cmp('Torque Pico Máximo', 'E1 Torq ft lbs', 'max', '{:.0f}', ' lb.ft', dfA, dfB)}
-{_cmp('Torque Desvio-Padrão (Variabilidade)', 'E1 Torq ft lbs', 'std', '{:.0f}', ' lb.ft')}
-
-- TEMPERATURA INTER-TURBINAS T5 / ITT (ºC):
+{_cmp('Torque P95', 'E1 Torq ft lbs', 'p95', '{:.0f}', ' lb.ft')}
+{_cmp('Torque Máximo', 'E1 Torq ft lbs', 'max', '{:.0f}', ' lb.ft', dfA, dfB)}
+{_cmp('Torque Oscilação (Std)', 'E1 Torq ft lbs', 'std', '{:.0f}', ' lb.ft')}
+- T5 / ITT (ºC):
 {_cmp('T5/ITT Média', 'E1 ITT', 'mean', '{:.1f}', ' ºC')}
-{_cmp('T5/ITT P95 (Regime Sustentado)', 'E1 ITT', 'p95', '{:.1f}', ' ºC')}
-{_cmp('T5/ITT Pico Máximo', 'E1 ITT', 'max', '{:.0f}', ' ºC', dfA, dfB)}
-{_cmp('T5/ITT Oscilação (Desvio-Padrão)', 'E1 ITT', 'std', '{:.1f}', ' ºC')}
+{_cmp('T5/ITT P95', 'E1 ITT', 'p95', '{:.1f}', ' ºC')}
+{_cmp('T5/ITT Máxima', 'E1 ITT', 'max', '{:.0f}', ' ºC', dfA, dfB)}
+{_cmp('T5/ITT Oscilação (Std)', 'E1 ITT', 'std', '{:.1f}', ' ºC')}
 - Margem Térmica até Red Line ({lim_itt:.0f} ºC): Voo A = {margem_itt_A} | Voo B = {margem_itt_B}
-
 - GERADOR DE GÁS Ng (%):
 {_cmp('Ng Média', 'E1 NG', 'mean', '{:.2f}', '%')}
-{_cmp('Ng P95 (Alta Rotação Sustentada)', 'E1 NG', 'p95', '{:.2f}', '%')}
-{_cmp('Ng Pico Máximo', 'E1 NG', 'max', '{:.1f}', '%', dfA, dfB)}
-{_cmp('Ng Oscilação (Desvio-Padrão)', 'E1 NG', 'std', '{:.2f}', '%')}
+{_cmp('Ng P95', 'E1 NG', 'p95', '{:.2f}', '%')}
+{_cmp('Ng Máxima', 'E1 NG', 'max', '{:.1f}', '%', dfA, dfB)}
+{_cmp('Ng Oscilação (Std)', 'E1 NG', 'std', '{:.2f}', '%')}
 - Margem de Rotação até Red Line ({lim_ng:.1f}%): Voo A = {margem_ng_A} | Voo B = {margem_ng_B}
-
 - HÉLICE Nh (%):
 {_cmp('Nh Média', 'E1 NP %', 'mean', '{:.2f}', '%')}
 {_cmp('Nh Máxima', 'E1 NP %', 'max', '{:.1f}', '%', dfA, dfB)}
-{_cmp('Nh Estabilidade (Desvio-Padrão)', 'E1 NP %', 'std', '{:.2f}', '%')}
-
-- SISTEMA DE LUBRIFICAÇÃO (MOTOR EM REGIME Ng > 50%):
+{_cmp('Nh Oscilação (Std)', 'E1 NP %', 'std', '{:.2f}', '%')}
+- LUBRIFICAÇÃO (Ng > 50%):
 {_cmp('Temp. Óleo Média', 'E1 OilT_Celsius', 'mean', '{:.1f}', ' ºC', dfA_m, dfB_m)}
 {_cmp('Temp. Óleo Máxima', 'E1 OilT_Celsius', 'max', '{:.0f}', ' ºC', dfA_m, dfB_m)}
-{_cmp('Pressão Óleo Mínima em Regime', 'E1 OilP', 'min', '{:.0f}', ' PSI', dfA_m, dfB_m)}
-{_cmp('Pressão Óleo Média em Regime', 'E1 OilP', 'mean', '{:.1f}', ' PSI', dfA_m, dfB_m)}
-{_cmp('Pressão Óleo Máxima em Regime', 'E1 OilP', 'max', '{:.0f}', ' PSI', dfA_m, dfB_m)}
+{_cmp('Pressão Óleo Mínima', 'E1 OilP', 'min', '{:.0f}', ' PSI', dfA_m, dfB_m)}
+{_cmp('Pressão Óleo Média', 'E1 OilP', 'mean', '{:.1f}', ' PSI', dfA_m, dfB_m)}
+{_cmp('Pressão Óleo Máxima', 'E1 OilP', 'max', '{:.0f}', ' PSI', dfA_m, dfB_m)}
 
-=== FORMATO OBRIGATÓRIO ===
-- NÃO mencione kW, HP, kg/s, fluxo de combustível, toneladas, clima ou resolução de panes/manutenção corretiva.
-- Separe claramente o que decorre de diferença de altitude/perfil de voo do que representa variação real de rendimento do motor.
-- Use exatamente `#`, `##`, `*` e **negrito** para todos os parâmetros, deltas e conclusões quantitativas.
+=== 4. LIMITES DO PERFIL ({projeto_atual}) E EXCEDÊNCIAS PRÉ-AUDITADAS ===
+- Limites: Torque Red {l_tq_red} lb.ft | T5 Amarelo/Red {l_itt_yel}/{l_itt_red} ºC | Ng Amarelo/Red {l_ng_yel}/{l_ng_red}% | Nh Red {l_nh_red}% | OilT Red {l_oilt_red} ºC | OilP {l_oilp_min}–{l_oilp_red} PSI
+- Excedências detectadas automaticamente:
+{txt_aud_trend}
+
+=== FORMATO OBRIGATÓRIO (TABELAS MANDATÓRIAS) ===
+- NÃO use linhas '---'. Nunca use separador de milhar nos números.
+- OBRIGATÓRIO apresentar as seções 1, 2, 3 e 4 em TABELAS MARKDOWN padronizadas exatamente como abaixo, seguidas de 2 a 4 tópicos (`*`) interpretativos.
+- OBRIGATÓRIO citar todas as excedências pré-auditadas acima (nunca diga "dentro dos limites" se houver excedências).
 
 # ESTUDO DETALHADO DE PERFORMANCE E DEGRADAÇÃO DE MOTOR (TREND MONITORING)
-## 1. EQUIVALÊNCIA DE MISSÃO E IMPACTO DO PERFIL DE VOO (ALTITUDE, VELOCIDADE E CARGAS)
-## 2. ANÁLISE DE EFICIÊNCIA EM BANDA DE ISO-TORQUE (DESEMPENHO REAL DO MOTOR)
-## 3. COMPORTAMENTO TÉRMICO (T5/ITT), DERIVA DA SEÇÃO QUENTE E MARGEM TÉRMICA
-## 4. COMPORTAMENTO DO GERADOR DE GÁS (NG), ENTREGA DE TORQUE E GOVERNANÇA DE HÉLICE (NH)
-## 5. REGIME TERMOMECÂNICO DO SISTEMA DE LUBRIFICAÇÃO (OILT E OILP)
-## 6. CLASSIFICAÇÃO FINAL DA TENDÊNCIA DE PERFORMANCE (ESTÁVEL / DESVIO LEVE / DEGRADAÇÃO ACENTUADA)
+## 1. EQUIVALÊNCIA DE MISSÃO E PERFIL DE VOO
+| Parâmetro | Voo A | Voo B | Delta (B - A) |
+| :--- | :--- | :--- | :--- |
+| Altitude MSL Média / Máxima (ft) | ... | ... | ... |
+| Velocidade IAS Média / Máxima (kt) | ... | ... | ... |
+| Força G Mínima / Máxima (G) | ... | ... | ... |
+
+## 2. EFICIÊNCIA EM BANDA DE ISO-TORQUE (MESMA CARGA MECÂNICA)
+| Indicador (Iso-Torque) | Voo A | Voo B | Delta (B - A) |
+| :--- | :--- | :--- | :--- |
+| Torque Médio na Banda (lb.ft) | ... | ... | ... |
+| T5 / ITT Média para o Mesmo Torque (ºC) | ... | ... | ... |
+| Ng Média para o Mesmo Torque (%) | ... | ... | ... |
+| Altitude / IAS Média na Banda | ... | ... | ... |
+| Índice Térmico (ºC por 1000 lb.ft) | ... | ... | ... |
+| Índice de Compressor (% Ng por 1000 lb.ft) | ... | ... | ... |
+
+## 3. PERFORMANCE COMPARADA DO MOTOR (TORQUE, T5/ITT, NG E NH)
+| Parâmetro | Voo | Média | P95 | Máximo | Oscilação (Std) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| Torque (lb.ft) | Voo A | ... | ... | ... | ... |
+| Torque (lb.ft) | Voo B | ... | ... | ... | ... |
+| Temperatura T5 / ITT (ºC) | Voo A | ... | ... | ... | ... |
+| Temperatura T5 / ITT (ºC) | Voo B | ... | ... | ... | ... |
+| Gerador de Gás Ng (%) | Voo A | ... | ... | ... | ... |
+| Gerador de Gás Ng (%) | Voo B | ... | ... | ... | ... |
+| Rotação da Hélice Nh (%) | Voo A | ... | - | ... | ... |
+| Rotação da Hélice Nh (%) | Voo B | ... | - | ... | ... |
+
+## 4. SISTEMA DE LUBRIFICAÇÃO (OILT E OILP EM REGIME)
+| Parâmetro | Voo | Mínimo | Média | Máximo |
+| :--- | :--- | :--- | :--- | :--- |
+| Temperatura do Óleo - OilT (ºC) | Voo A | - | ... | ... |
+| Temperatura do Óleo - OilT (ºC) | Voo B | - | ... | ... |
+| Pressão do Óleo - OilP (PSI) | Voo A | ... | ... | ... |
+| Pressão do Óleo - OilP (PSI) | Voo B | ... | ... | ... |
+
+## 5. CONFORMIDADE DE LIMITES E CLASSIFICAÇÃO FINAL DA TENDÊNCIA (ESTÁVEL / DESVIO LEVE / DEGRADAÇÃO ACENTUADA)
 """
                                 texto_ia_trend = gerar_texto_ia(prompt_trend)
                                 st.session_state.obs_graficos = texto_ia_trend
@@ -2813,29 +3054,55 @@ Elabore uma ANÁLISE TÉCNICA DETALHADA do voo abaixo, analisando EXCLUSIVAMENTE
 - Aproximação Final e Pouso (últimas 300 amostras em voo): IAS média {ias_final} kt | Pico de Força G no toque {g_pouso}G
 
 === 3. PARÂMETROS DO MOTOR 1 ===
-- Torque (lb.ft): Média em voo {_safe(df_voo, 'E1 Torq ft lbs', 'mean', '{:.0f}')} lb.ft | P95 {_safe(df_voo, 'E1 Torq ft lbs', 'p95', '{:.0f}')} lb.ft | Pico Máximo {_safe(df, 'E1 Torq ft lbs', 'max', '{:.0f}')} lb.ft | Oscilação (Std) {_safe(df_voo, 'E1 Torq ft lbs', 'std', '{:.0f}')} lb.ft (Limite Red Line: {l_tq_red} lb.ft)
-- Temperatura T5 / ITT (ºC): Média em voo {_safe(df_voo, 'E1 ITT', 'mean', '{:.0f}')} ºC | P95 {_safe(df_voo, 'E1 ITT', 'p95', '{:.0f}')} ºC | Pico Máximo {_safe(df, 'E1 ITT', 'max', '{:.0f}')} ºC (Amarelo: {l_itt_yel} ºC | Red Line: {l_itt_red} ºC)
-- Gerador de Gás Ng (%): Média em voo {_safe(df_voo, 'E1 NG', 'mean', '{:.1f}')}% | P95 {_safe(df_voo, 'E1 NG', 'p95', '{:.1f}')}% | Pico Máximo {_safe(df, 'E1 NG', 'max', '{:.1f}')}% (Amarelo: {l_ng_yel}% | Red Line: {l_ng_red}%)
-- Rotação da Hélice Nh (%): Mínima em voo {_safe(df_voo, 'E1 NP %', 'min', '{:.1f}')}% | Média {_safe(df_voo, 'E1 NP %', 'mean', '{:.1f}')}% | Pico Máximo {_safe(df, 'E1 NP %', 'max', '{:.1f}')}% (Red Line: {l_nh_red}%)
-- Relação no Instante do Torque Máximo: T5/ITT = {itt_no_tq_max} | Ng = {ng_no_tq_max} | Altitude = {alt_no_tq_max}
+- Torque (lb.ft): Média {_safe(df_voo, 'E1 Torq ft lbs', 'mean', '{:.0f}')} | P95 {_safe(df_voo, 'E1 Torq ft lbs', 'p95', '{:.0f}')} | Máximo {_safe(df, 'E1 Torq ft lbs', 'max', '{:.0f}')} | Std {_safe(df_voo, 'E1 Torq ft lbs', 'std', '{:.0f}')} (Red Line: {l_tq_red} lb.ft)
+- Temperatura T5 / ITT (ºC): Média {_safe(df_voo, 'E1 ITT', 'mean', '{:.0f}')} | P95 {_safe(df_voo, 'E1 ITT', 'p95', '{:.0f}')} | Máximo {_safe(df, 'E1 ITT', 'max', '{:.0f}')} | Std {_safe(df_voo, 'E1 ITT', 'std', '{:.1f}')} (Amarelo: {l_itt_yel} ºC | Red Line: {l_itt_red} ºC)
+- Gerador de Gás Ng (%): Média {_safe(df_voo, 'E1 NG', 'mean', '{:.1f}')} | P95 {_safe(df_voo, 'E1 NG', 'p95', '{:.1f}')} | Máximo {_safe(df, 'E1 NG', 'max', '{:.1f}')} | Std {_safe(df_voo, 'E1 NG', 'std', '{:.2f}')} (Amarelo: {l_ng_yel}% | Red Line: {l_ng_red}%)
+- Rotação da Hélice Nh (%): Mínima {_safe(df_voo, 'E1 NP %', 'min', '{:.1f}')} | Média {_safe(df_voo, 'E1 NP %', 'mean', '{:.1f}')} | Máximo {_safe(df, 'E1 NP %', 'max', '{:.1f}')} (Red Line: {l_nh_red}%)
+- Acoplamento no Torque Máximo: T5/ITT = {itt_no_tq_max} | Ng = {ng_no_tq_max} | Altitude = {alt_no_tq_max}
 
 === 4. SISTEMA DE LUBRIFICAÇÃO (MOTOR EM REGIME Ng > 50%) ===
-- Temperatura do Óleo (OilT): Média {_safe(df_mot, 'E1 OilT_Celsius', 'mean', '{:.0f}')} ºC | Máxima {_safe(df_mot, 'E1 OilT_Celsius', 'max', '{:.0f}')} ºC (Limite Red Line: {l_oilt_red} ºC)
+- Temperatura do Óleo (OilT): Média {_safe(df_mot, 'E1 OilT_Celsius', 'mean', '{:.0f}')} ºC | Máxima {_safe(df_mot, 'E1 OilT_Celsius', 'max', '{:.0f}')} ºC (Red Line: {l_oilt_red} ºC)
 - Pressão do Óleo (OilP): Mínima {_safe(df_mot, 'E1 OilP', 'min', '{:.0f}')} PSI | Média {_safe(df_mot, 'E1 OilP', 'mean', '{:.0f}')} PSI | Máxima {_safe(df_mot, 'E1 OilP', 'max', '{:.0f}')} PSI (Faixa: {l_oilp_min} a {l_oilp_red} PSI)
 
-=== 5. EXCEDÊNCIAS DETECTADAS PELO SISTEMA ===
+=== 5. EXCEDÊNCIAS PRÉ-AUDITADAS PELO SISTEMA ===
 {texto_alertas}
 
-=== INSTRUÇÕES DE ESTRUTURA (OBRIGATÓRIO) ===
-- NÃO mencione kW, HP, kg/s, toneladas, pressão atmosférica, clima ou resolução de panes/manutenção corretiva.
-- Na seção 5, analise cada excedência listada acima informando horário, altitude e velocidade — destacando explicitamente se ocorreu no solo (Vel: 0 kt) ou em voo.
-- Use exatamente `#`, `##`, `*` e **negrito** para os valores e sensores.
+=== FORMATO OBRIGATÓRIO (TABELAS MANDATÓRIAS) ===
+- NÃO use linhas '---'. Nunca use separador de milhar nos números.
+- OBRIGATÓRIO apresentar os dados das seções 1, 2, 3 e 4 em TABELAS MARKDOWN exatamente como abaixo, seguidas de 2 a 3 tópicos (`*`) objetivos.
+- OBRIGATÓRIO detalhar TODAS as excedências pré-auditadas na Seção 5 informando horário, altitude, velocidade e se ocorreu no solo (Vel: 0 kt) ou em voo. Nunca afirme que o voo ficou "dentro dos limites" se houver qualquer excedência listada.
 
 # ANÁLISE TÉCNICA DETALHADA DE VOO E PERFORMANCE (SOLO)
 ## 1. CRONOLOGIA E PERFIL DE VOO (ALTITUDE E VELOCIDADE)
+| Parâmetro | Valor Registrado |
+| :--- | :--- |
+| Acionamento / Decolagem / Pouso / Corte | ... |
+| Tempo Efetivo de Voo | ... |
+| Altitude MSL Média / Máxima (ft) | ... |
+| Velocidade IAS Média / P95 / Máxima (kt) | ... |
+
 ## 2. ATITUDES, ENVELOPE ESTRUTURAL (FORÇA G) E POUSO
-## 3. PERFORMANCE DO MOTOR (TORQUE, T5/ITT, NG E NH)
-## 4. SISTEMA DE LUBRIFICAÇÃO (OILT E OILP)
+| Parâmetro | Mínimo | Média | Máximo | Referência |
+| :--- | :--- | :--- | :--- | :--- |
+| Força G (NormAc) | ... | ... | ... | {l_g_min}G a +{l_g_max}G |
+| Arfagem - Pitch (º) | ... | - | ... | Atitudes >45º: {amostras_acro} |
+| Rolagem - Roll (º) | ... | - | ... | Voo invertido: {seg_inv_max}s |
+| Pouso (IAS Final / Pico G Toque) | - | {ias_final} kt | {g_pouso} G | Limite Flape: 148 kt |
+
+## 3. PERFORMANCE DO MOTOR 1 (TORQUE, T5/ITT, NG E NH)
+| Parâmetro | Média | P95 | Máximo | Oscilação (Std) | Red Line |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| Torque (lb.ft) | ... | ... | ... | ... | {l_tq_red} |
+| Temperatura T5 / ITT (ºC) | ... | ... | ... | ... | {l_itt_red} |
+| Gerador de Gás Ng (%) | ... | ... | ... | ... | {l_ng_red} |
+| Rotação da Hélice Nh (%) | ... | - | ... | - | {l_nh_red} |
+
+## 4. SISTEMA DE LUBRIFICAÇÃO (OILT E OILP EM REGIME)
+| Parâmetro | Mínimo | Média | Máximo | Faixa / Limite |
+| :--- | :--- | :--- | :--- | :--- |
+| Temperatura do Óleo - OilT (ºC) | - | ... | ... | Máx {l_oilt_red} ºC |
+| Pressão do Óleo - OilP (PSI) | ... | ... | ... | {l_oilp_min} a {l_oilp_red} PSI |
+
 ## 5. DETALHAMENTO DAS EXCEDÊNCIAS E MARGENS OPERACIONAIS
 """
 
