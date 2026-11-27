@@ -1716,11 +1716,10 @@ def renderizar_markdown_no_word(doc, texto, cor_titulo=RGBColor(27, 54, 93)):
             continue
 
         elif l_limpa.startswith("* ") or l_limpa.startswith("- "):
-            conteudo_item = l_limpa[2:].strip()
+            conteudo_item = l_limpa[2:].strip().rstrip("|").strip()
             adicionar_paragrafo_com_markdown(doc, conteudo_item, bullet=True)
-
         else:
-            adicionar_paragrafo_com_markdown(doc, l_limpa)
+            adicionar_paragrafo_com_markdown(doc, l_limpa.rstrip("|").strip())
 
         i += 1
 
@@ -2679,7 +2678,10 @@ Redija um ESTUDO TÉCNICO EXAUSTIVO comparando o Voo A (Baseline / Referência) 
             min_g = df['NormAc'].min() if 'NormAc' in df.columns else 0
             alertas = []
 
-            def add_alerta_contexto(coluna, valor, mensagem):
+            def add_alerta_contexto(coluna, valor, mensagem, df_ref=None):
+                try:
+                    base = df if df_ref is None else df_ref
+                    row = base[base[coluna] == valor].iloc[0]
                 try:
                     row = df[df[coluna] == valor].iloc[0]
                     tempo = row['Datetime'].strftime('%H:%M:%S') if pd.notna(row['Datetime']) else 'N/A'
@@ -2762,10 +2764,20 @@ Redija um ESTUDO TÉCNICO EXAUSTIVO comparando o Voo A (Baseline / Referência) 
                     elif l_nh_yel is not None and m_nh >= l_nh_yel: add_alerta_contexto(f'E{i_mot} NP %', m_nh, f"[ALERTA] Motor {i_mot} ARCO AMARELO Nh: {m_nh:.1f}%")
 
             for i_mot in range(1, qtd_motores_config + 1):
-                m_oilt = df[f'E{i_mot} OilT_Celsius'].max() if f'E{i_mot} OilT_Celsius' in df.columns else 0
-                m_oilp = df[f'E{i_mot} OilP'].max() if f'E{i_mot} OilP' in df.columns else 0
-                if l_oilt_red is not None and m_oilt >= l_oilt_red: add_alerta_contexto(f'E{i_mot} OilT_Celsius', m_oilt, f"[CRÍTICO] Motor {i_mot} LINHA VERMELHA Temp Óleo: {m_oilt:.0f} ºC")
-                if l_oilp_red is not None and m_oilp >= l_oilp_red: add_alerta_contexto(f'E{i_mot} OilP', m_oilp, f"[CRÍTICO] Motor {i_mot} LINHA VERMELHA Pressão Óleo: {m_oilp:.0f} PSI")
+                col_ng_m = f'E{i_mot} NG'
+                df_mot_i = df[df[col_ng_m] > 50] if col_ng_m in df.columns else df
+                if df_mot_i.empty:
+                    df_mot_i = df
+
+                col_oilt_m = f'E{i_mot} OilT_Celsius'
+                col_oilp_m = f'E{i_mot} OilP'
+                m_oilt = df_mot_i[col_oilt_m].max() if (col_oilt_m in df_mot_i.columns and not df_mot_i[col_oilt_m].dropna().empty) else 0
+                m_oilp = df_mot_i[col_oilp_m].max() if (col_oilp_m in df_mot_i.columns and not df_mot_i[col_oilp_m].dropna().empty) else 0
+
+                if l_oilt_red is not None and m_oilt >= l_oilt_red:
+                    add_alerta_contexto(col_oilt_m, m_oilt, f"[CRÍTICO] Motor {i_mot} LINHA VERMELHA Temp Óleo: {m_oilt:.0f} ºC", df_mot_i)
+                if l_oilp_red is not None and m_oilp >= l_oilp_red:
+                    add_alerta_contexto(col_oilp_m, m_oilp, f"[CRÍTICO] Motor {i_mot} LINHA VERMELHA Pressão Óleo: {m_oilp:.0f} PSI", df_mot_i)
 
             tempos = {'acionamento': '-', 'decolagem': '-', 'pouso': '-', 'corte': '-', 't_voo': '-'}
             if tipo_projeto == "Asa Rotativa":
@@ -2836,6 +2848,7 @@ Redija um ESTUDO TÉCNICO EXAUSTIVO comparando o Voo A (Baseline / Referência) 
 
             with aba_didatica:
                 st.markdown("#### Leituras de Pico da Missão (Engine & Airframe Limits)")
+                df_m1_on = df[df['E1 NG'] > 50] if ('E1 NG' in df.columns and (df['E1 NG'] > 50).any()) else df
                 c1, c2, c3, c4 = st.columns(4)
                 with c1:
                     exibir_card_arcos("Força G Máxima (+)", max_g, l_g_max, None, None, "G", ":.2f")
@@ -2848,12 +2861,12 @@ Redija um ESTUDO TÉCNICO EXAUSTIVO comparando o Voo A (Baseline / Referência) 
                 with c3:
                     max_torq = df['E1 Torq ft lbs'].max() if 'E1 Torq ft lbs' in df.columns else 0
                     exibir_card_arcos("Torque Máximo", max_torq, l_tq_red, l_tq_yel, None, "lb.ft", ":.0f")
-                    max_oilt = df['E1 OilT_Celsius'].max() if 'E1 OilT_Celsius' in df.columns else 0
+                    max_oilt = df_m1_on['E1 OilT_Celsius'].max() if ('E1 OilT_Celsius' in df_m1_on.columns and not df_m1_on['E1 OilT_Celsius'].dropna().empty) else 0
                     exibir_card_arcos("Temp. do Óleo (OilT)", max_oilt, l_oilt_red, None, l_oilt_min, "ºC", ":.0f")
                 with c4:
                     max_itt = df['E1 ITT'].max() if 'E1 ITT' in df.columns else 0
                     exibir_card_arcos("Temperatura T5 / ITT", max_itt, l_itt_red, l_itt_yel, None, "ºC", ":.0f")
-                    max_oilp = df['E1 OilP'].max() if 'E1 OilP' in df.columns else 0
+                    max_oilp = df_m1_on['E1 OilP'].max() if ('E1 OilP' in df_m1_on.columns and not df_m1_on['E1 OilP'].dropna().empty) else 0
                     exibir_card_arcos("Pressão do Óleo (OilP)", max_oilp, l_oilp_red, None, l_oilp_min, "PSI", ":.0f")
 
                 if projeto_atual == "T-27M (Oficial)":
@@ -3111,7 +3124,7 @@ Elabore uma ANÁLISE TÉCNICA DETALHADA do voo abaixo, analisando EXCLUSIVAMENTE
 
 === FORMATO OBRIGATÓRIO (TABELAS MANDATÓRIAS) ===
 - NÃO use linhas '---'. Nunca use separador de milhar nos números.
-- OBRIGATÓRIO apresentar os dados das seções 1, 2, 3 e 4 em TABELAS MARKDOWN exatamente como abaixo, seguidas de 2 a 3 tópicos (`*`) objetivos.
+- OBRIGATÓRIO apresentar os dados das seções 1, 2, 3 e 4 em TABELAS MARKDOWN exatamente como abaixo, seguidas de 2 a 3 tópicos (`*`) interpretando diretamente os valores reais medidos neste voo (NUNCA escreva verbos de checklist como "Avaliar", "Verificar", "Monitorar" ou "Identificar").
 - OBRIGATÓRIO detalhar TODAS as excedências pré-auditadas na Seção 5 informando horário, altitude, velocidade e se ocorreu no solo (Vel: 0 kt) ou em voo. Nunca afirme que o voo ficou "dentro dos limites" se houver qualquer excedência listada.
 
 # ANÁLISE TÉCNICA DETALHADA DE VOO E PERFORMANCE (SOLO)
