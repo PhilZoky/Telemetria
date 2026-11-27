@@ -2682,8 +2682,6 @@ Redija um ESTUDO TÉCNICO EXAUSTIVO comparando o Voo A (Baseline / Referência) 
                 try:
                     base = df if df_ref is None else df_ref
                     row = base[base[coluna] == valor].iloc[0]
-                try:
-                    row = df[df[coluna] == valor].iloc[0]
                     tempo = row['Datetime'].strftime('%H:%M:%S') if pd.notna(row['Datetime']) else 'N/A'
                     alt_val = row.get('AltMSL', np.nan)
                     vel_val = row.get('IAS', np.nan)
