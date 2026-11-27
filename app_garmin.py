@@ -1300,10 +1300,76 @@ def _preencher_celula_formatada(cell, texto, alinhamento, cor_texto, tamanho_pt=
         run.font.size = Pt(tamanho_pt)
         run.font.color.rgb = cor_texto
 
+def _inserir_legenda_metricas(doc, incluir_p90=False, incluir_motor=True):
+    itens = []
+    if incluir_motor:
+        itens.extend([
+            ("Média", "patamar típico do parâmetro considerando toda a missão."),
+            ("P95 (Percentil 95)", "valor atingido nos 5% mais exigidos do voo; indica o regime alto sustentado, filtrando picos isolados de 1 segundo."),
+            ("Máximo (Máx)", "maior pico absoluto registrado em qualquer instante, utilizado para auditoria de limites operacionais."),
+            ("Oscilação / Std (Desvio-Padrão)", "mede o quanto o parâmetro variou ao longo do voo (valores maiores indicam mudanças de regime/manete mais amplas; menores indicam operação mais constante).")
+        ])
+    if incluir_p90:
+        itens.append(
+            ("Mediana (P50) e P90", "a Mediana representa a separação típica na metade da missão; o P90 indica a distância abaixo da qual a formatura permaneceu em 90% do tempo.")
+        )
+    if not itens:
+        return
+
+    # Pequeno separador para o Word não mesclar a caixa de legenda com a tabela acima
+    p_sep = doc.add_paragraph()
+    p_sep.paragraph_format.space_before = Pt(0)
+    p_sep.paragraph_format.space_after = Pt(2)
+    r_sep = p_sep.add_run("")
+    r_sep.font.size = Pt(2)
+
+    tab_leg = doc.add_table(rows=1, cols=1)
+    tab_leg.alignment = WD_TABLE_ALIGNMENT.CENTER
+    tab_leg.autofit = False
+
+    tblPr = tab_leg._tbl.tblPr
+    borders = parse_xml(
+        f'<w:tblBorders {nsdecls("w")}>'
+        f'<w:top w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>'
+        f'<w:bottom w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>'
+        f'<w:left w:val="single" w:sz="18" w:space="0" w:color="1B365D"/>'
+        f'<w:right w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>'
+        f'</w:tblBorders>'
+    )
+    tblPr.append(borders)
+
+    trPr = tab_leg.rows[0]._tr.get_or_add_trPr()
+    trPr.append(OxmlElement('w:cantSplit'))
+
+    cell = tab_leg.rows[0].cells[0]
+    cell.width = Cm(17.0)
+    set_cell_background(cell, "F8FAFC")
+    set_cell_margins(cell, top=75, bottom=75, left=130, right=120)
+
+    p_tit = cell.paragraphs[0]
+    p_tit.paragraph_format.space_before = Pt(0)
+    p_tit.paragraph_format.space_after = Pt(3)
+    r_tit = p_tit.add_run("LEGENDA DOS INDICADORES ESTATÍSTICOS")
+    r_tit.bold = True
+    r_tit.font.size = Pt(8.0)
+    r_tit.font.color.rgb = RGBColor(27, 54, 93)
+
+    for nome, desc in itens:
+        p_it = cell.add_paragraph()
+        p_it.paragraph_format.space_before = Pt(1)
+        p_it.paragraph_format.space_after = Pt(1.5)
+        p_it.paragraph_format.line_spacing = 1.08
+        r_b = p_it.add_run(f"• {nome}: ")
+        r_b.bold = True
+        r_b.font.size = Pt(8.0)
+        r_b.font.color.rgb = RGBColor(30, 41, 59)
+        r_d = p_it.add_run(desc)
+        r_d.font.size = Pt(8.0)
+        r_d.font.color.rgb = RGBColor(71, 85, 105)
+
 def _inserir_tabela_markdown_word(doc, linhas_brutas):
     linhas_limpas = []
     for ln in linhas_brutas:
-        # Ignora a linha separadora do Markdown (|---|---|---|)
         if re.match(r'^[\|\s\-:]+$', ln):
             continue
         celulas = [c.strip() for c in ln.strip('|').split('|')]
@@ -1311,7 +1377,7 @@ def _inserir_tabela_markdown_word(doc, linhas_brutas):
             linhas_limpas.append(celulas)
 
     if not linhas_limpas:
-        return
+        return False, False
 
     n_cols = max(len(r) for r in linhas_limpas)
     linhas_norm = [r + [""] * (n_cols - len(r)) for r in linhas_limpas]
@@ -1321,18 +1387,20 @@ def _inserir_tabela_markdown_word(doc, linhas_brutas):
     table.autofit = False
     _estilizar_bordas_tabela(table)
 
-    # Calcula largura proporcional somando 17.0 cm (largura útil da folha A4)
     pesos = []
     for c_idx in range(n_cols):
         tam_med = max(len(re.sub(r'\*\*', '', r[c_idx])) for r in linhas_norm)
-        pesos.append(max(tam_med, 8))
+        pesos.append(min(max(tam_med, 8), 26))
     soma_pesos = sum(pesos)
-    larguras_cm = [max(2.2, (p / soma_pesos) * 17.0) for p in pesos]
+    larguras_cm = [max(2.0, (p / soma_pesos) * 17.0) for p in pesos]
     fator = 17.0 / sum(larguras_cm)
     larguras_cm = [w * fator for w in larguras_cm]
 
     COR_BRANCO = RGBColor(255, 255, 255)
     COR_TEXTO_TAB = RGBColor(30, 41, 59)
+    pad_lr = 65 if n_cols >= 5 else 100
+    tam_hdr = 9.0 if n_cols >= 5 else 9.5
+    tam_body = 8.5 if n_cols >= 5 else 9.0
 
     for r_idx, linha_dados in enumerate(linhas_norm):
         row = table.rows[r_idx]
@@ -1349,7 +1417,7 @@ def _inserir_tabela_markdown_word(doc, linhas_brutas):
             cell = row.cells[c_idx]
             cell.width = Cm(larguras_cm[c_idx])
             set_cell_background(cell, bg_hex)
-            set_cell_margins(cell, top=75, bottom=75, left=100, right=100)
+            set_cell_margins(cell, top=70, bottom=70, left=pad_lr, right=pad_lr)
 
             alinh = WD_ALIGN_PARAGRAPH.LEFT if (c_idx == 0 and not e_cabecalho) else WD_ALIGN_PARAGRAPH.CENTER
             _preencher_celula_formatada(
@@ -1357,13 +1425,21 @@ def _inserir_tabela_markdown_word(doc, linhas_brutas):
                 valor,
                 alinhamento=alinh,
                 cor_texto=COR_BRANCO if e_cabecalho else COR_TEXTO_TAB,
-                tamanho_pt=9.5 if e_cabecalho else 9.0,
+                tamanho_pt=tam_hdr if e_cabecalho else tam_body,
                 forcar_negrito=e_cabecalho
             )
+
+    texto_tab = " ".join(" ".join(r) for r in linhas_norm).upper()
+    tem_motor = ("P95" in texto_tab) or ("STD" in texto_tab)
+    tem_p90 = ("P90" in texto_tab) or ("MEDIANA" in texto_tab)
+
+    if tem_motor or tem_p90:
+        _inserir_legenda_metricas(doc, incluir_p90=tem_p90, incluir_motor=tem_motor)
 
     p_esp = doc.add_paragraph()
     p_esp.paragraph_format.space_before = Pt(0)
     p_esp.paragraph_format.space_after = Pt(6)
+    return tem_motor, tem_p90
 
 def renderizar_markdown_no_word(doc, texto, cor_titulo=RGBColor(27, 54, 93)):
     """Converte títulos (#, ##, ###), tabelas Markdown (|...|), bullets (*, -) e negrito (**) para formatação nativa do Word."""
@@ -1371,6 +1447,7 @@ def renderizar_markdown_no_word(doc, texto, cor_titulo=RGBColor(27, 54, 93)):
         return
 
     linhas = str(texto).split('\n')
+    legenda_motor_ok = False
     i = 0
     while i < len(linhas):
         l_limpa = linhas[i].strip()
@@ -1378,7 +1455,6 @@ def renderizar_markdown_no_word(doc, texto, cor_titulo=RGBColor(27, 54, 93)):
             i += 1
             continue
 
-        # Detecta bloco de tabela Markdown (linhas começando com |)
         if l_limpa.startswith("|") and l_limpa.count("|") >= 2:
             bloco_tab = []
             while i < len(linhas):
@@ -1388,7 +1464,9 @@ def renderizar_markdown_no_word(doc, texto, cor_titulo=RGBColor(27, 54, 93)):
                     i += 1
                 else:
                     break
-            _inserir_tabela_markdown_word(doc, bloco_tab)
+            ok_mot, _ = _inserir_tabela_markdown_word(doc, bloco_tab)
+            if ok_mot:
+                legenda_motor_ok = True
             continue
 
         if l_limpa.startswith("# "):
@@ -1439,6 +1517,13 @@ def renderizar_markdown_no_word(doc, texto, cor_titulo=RGBColor(27, 54, 93)):
             adicionar_paragrafo_com_markdown(doc, l_limpa)
 
         i += 1
+
+    # Garante a legenda mesmo no Voo Solo ou Trend Monitoring quando a IA escreve em tópicos
+    texto_upper = str(texto).upper()
+    if not legenda_motor_ok and ("P95" in texto_upper or "STD" in texto_upper):
+        _inserir_legenda_metricas(doc, incluir_p90=False, incluir_motor=True)
+        p_esp = doc.add_paragraph()
+        p_esp.paragraph_format.space_after = Pt(6)
 
 def gerar_docx_solo_editado(tempos_dict, alertas_texto, obs_dict, graficos_dict):
     doc = Document()
@@ -1931,12 +2016,16 @@ Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura ({pro
 | Roll Mínimo / Máximo (º) | ... | ... | ... |
 
 ## 3. PERFORMANCE DOS MOTORES E MODULAÇÃO DE POTÊNCIA (TORQUE, T5/ITT, NG E NH)
-| Parâmetro de Motor | Líder (Média / P95 / Máx / Std) | Ala (Média / P95 / Máx / Std) | Diferença / Destaque |
-| :--- | :--- | :--- | :--- |
-| Torque (lb.ft) | ... | ... | ... |
-| Temperatura T5 / ITT (ºC) | ... | ... | ... |
-| Gerador de Gás Ng (%) | ... | ... | ... |
-| Rotação da Hélice Nh (%) | ... | ... | ... |
+| Parâmetro | Aeronave | Média | P95 | Máximo | Oscilação (Std) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| Torque (lb.ft) | Líder | ... | ... | ... | ... |
+| Torque (lb.ft) | Ala | ... | ... | ... | ... |
+| Temperatura T5 / ITT (ºC) | Líder | ... | ... | ... | ... |
+| Temperatura T5 / ITT (ºC) | Ala | ... | ... | ... | ... |
+| Gerador de Gás Ng (%) | Líder | ... | ... | ... | ... |
+| Gerador de Gás Ng (%) | Ala | ... | ... | ... | ... |
+| Rotação da Hélice Nh (%) | Líder | ... | - | ... | - |
+| Rotação da Hélice Nh (%) | Ala | ... | - | ... | - |
 
 ## 4. SÍNTESE COMPARATIVA DE DESEMPENHO DA ESQUADRILHA
 """
