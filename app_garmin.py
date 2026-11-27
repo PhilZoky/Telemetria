@@ -2255,7 +2255,7 @@ Produza uma ANÁLISE TÉCNICA COMPLETA E DETALHADA da missão em formatura ({pro
 ## 4. SÍNTESE COMPARATIVA DE DESEMPENHO E CONFORMIDADE DE LIMITES
 """
                                     texto_ia_form = gerar_texto_ia(prompt_form)
-                                    texto_ia_form = re.sub(r'\bFORMURA\b', 'FORMATURA', texto_ia_form, flags=re.IGNORECASE)
+                                    texto_ia_form = re.sub(r'(?m)^#\s+.*$', '# ANÁLISE TÉCNICA DETALHADA DE VOO EM FORMATURA', texto_ia_form, count=1)
                                     st.session_state.obs_comparativo = texto_ia_form
                                     st.session_state["_sync_form_ia"] = True
                                     mod_usado = st.session_state.get("ultimo_modelo_ia", "IA")
